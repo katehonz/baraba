@@ -9,6 +9,10 @@ import models/[user, company, account, counterpart, journal, currency]
 import services/auth
 import db/config
 import utils/json_utils
+import graphql/resolvers
+import "vendor/nim-graphql/graphql"
+
+var graphqlCtx: GraphqlRef
 
 const corsHeaders* = @{
   "Access-Control-Allow-Origin": "*",
@@ -36,6 +40,7 @@ router mainRouter:
   options "/api/entry-lines/@id": resp Http200, corsHeaders, ""
   options "/api/reports/turnover-sheet": resp Http200, corsHeaders, ""
   options "/api/reports/general-ledger": resp Http200, corsHeaders, ""
+  options "/graphql": resp Http200, corsHeaders, ""
 
   # =====================
   # Health check
@@ -704,10 +709,91 @@ router mainRouter:
     finally:
       releaseDbConn(db)
 
+  # =====================
+  # GRAPHQL ENDPOINT
+  # =====================
+  post "/graphql":
+    if graphqlCtx.isNil:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "GraphQL not initialized"})
+
+    let body = parseJson(request.body)
+    let query = body.getOrDefault("query").getStr("")
+    let variables = body.getOrDefault("variables")
+    let operationName = body.getOrDefault("operationName").getStr("")
+
+    if query.len == 0:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Query is required"})
+
+    # Clear previous query state
+    graphqlCtx.purgeQueries(includeVariables = true, includeStored = false)
+
+    # Parse variables
+    if not variables.isNil and variables.kind == JObject:
+      let varsRes = graphqlCtx.parseVars($variables)
+      if varsRes.isErr:
+        var errMsgs: seq[string]
+        for e in varsRes.error:
+          errMsgs.add($e)
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
+
+    # Parse and validate query
+    let queryRes = graphqlCtx.parseQuery(query)
+    if queryRes.isErr:
+      var errMsgs: seq[string]
+      for e in queryRes.error:
+        errMsgs.add($e)
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
+
+    # Execute
+    let jsonResp = JsonRespStream.new()
+    let execRes = graphqlCtx.executeRequest(respStream(jsonResp), operationName)
+    if execRes.isErr:
+      var errMsgs: seq[string]
+      for e in execRes.error:
+        errMsgs.add($e)
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
+
+    let response = jsonResp.getString()
+    resp Http200, {"Content-Type": "application/json"}, response
+
+  get "/graphql":
+    # GraphiQL interface
+    const graphiqlHtml = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Baraba GraphQL</title>
+  <link href="https://unpkg.com/graphiql/graphiql.min.css" rel="stylesheet" />
+</head>
+<body style="margin: 0;">
+  <div id="graphiql" style="height: 100vh;"></div>
+  <script crossorigin src="https://unpkg.com/react/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/graphiql/graphiql.min.js"></script>
+  <script>
+    const fetcher = GraphiQL.createFetcher({ url: '/graphql' });
+    ReactDOM.render(
+      React.createElement(GraphiQL, { fetcher: fetcher }),
+      document.getElementById('graphiql'),
+    );
+  </script>
+</body>
+</html>
+"""
+    resp Http200, {"Content-Type": "text/html"}, graphiqlHtml
+
 proc main() =
   echo "Starting Baraba API server..."
   initDbPool()
   defer: closeDbPool()
+
+  # Initialize GraphQL
+  echo "Initializing GraphQL..."
+  graphqlCtx = setupGraphQL()
+  if graphqlCtx.isNil:
+    echo "Warning: GraphQL initialization failed"
+  else:
+    echo "GraphQL ready at /graphql"
 
   echo "http://localhost:5000"
   let settings = newSettings(port = Port(5000))

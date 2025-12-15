@@ -1,0 +1,283 @@
+scalar DateTime
+
+type Query {
+  # Auth
+  me: User
+
+  # Companies
+  companies: [Company!]!
+  company(id: Int!): Company
+
+  # Accounts
+  accounts(companyId: Int!): [Account!]!
+  account(id: Int!): Account
+
+  # Counterparts
+  counterparts(companyId: Int!): [Counterpart!]!
+  counterpart(id: Int!): Counterpart
+
+  # Journal Entries
+  journalEntries(companyId: Int!, posted: Boolean): [JournalEntry!]!
+  journalEntry(id: Int!): JournalEntry
+
+  # Reports
+  turnoverSheet(companyId: Int!, fromDate: String!, toDate: String!): TurnoverSheet!
+  generalLedger(companyId: Int!, accountId: Int!, fromDate: String!, toDate: String!): GeneralLedger!
+}
+
+type Mutation {
+  # Auth
+  login(username: String!, password: String!): AuthPayload!
+  register(username: String!, email: String!, password: String!): AuthPayload!
+
+  # Companies
+  createCompany(input: CreateCompanyInput!): Company!
+  updateCompany(id: Int!, input: UpdateCompanyInput!): Company!
+  deleteCompany(id: Int!): Boolean!
+
+  # Accounts
+  createAccount(input: CreateAccountInput!): Account!
+  updateAccount(id: Int!, input: UpdateAccountInput!): Account!
+  deleteAccount(id: Int!): Boolean!
+
+  # Counterparts
+  createCounterpart(input: CreateCounterpartInput!): Counterpart!
+  updateCounterpart(id: Int!, input: UpdateCounterpartInput!): Counterpart!
+  deleteCounterpart(id: Int!): Boolean!
+
+  # Journal Entries
+  createJournalEntry(input: CreateJournalEntryInput!): JournalEntry!
+  updateJournalEntry(id: Int!, input: UpdateJournalEntryInput!): JournalEntry!
+  deleteJournalEntry(id: Int!): Boolean!
+  postJournalEntry(id: Int!): JournalEntry!
+  unpostJournalEntry(id: Int!): JournalEntry!
+
+  # Entry Lines
+  createEntryLine(input: CreateEntryLineInput!): EntryLine!
+  deleteEntryLine(id: Int!): Boolean!
+}
+
+# === Types ===
+
+type User {
+  id: Int!
+  username: String!
+  email: String!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+type Company {
+  id: Int!
+  name: String!
+  eik: String!
+  vatNumber: String
+  address: String
+  city: String
+  country: String
+  phone: String
+  email: String
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Account {
+  id: Int!
+  code: String!
+  name: String!
+  description: String
+  accountType: String!
+  accountClass: Int!
+  level: Int!
+  isActive: Boolean!
+  isAnalytical: Boolean!
+  supportsQuantities: Boolean!
+  companyId: Int!
+  parentId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Counterpart {
+  id: Int!
+  name: String!
+  eik: String
+  vatNumber: String
+  address: String
+  city: String
+  country: String
+  phone: String
+  email: String
+  isActive: Boolean!
+  companyId: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type JournalEntry {
+  id: Int!
+  entryNumber: Int!
+  documentDate: DateTime!
+  vatDate: DateTime
+  accountingDate: DateTime!
+  documentNumber: String
+  description: String!
+  totalAmount: Float!
+  totalVatAmount: Float!
+  isPosted: Boolean!
+  documentType: String!
+  vatDocumentType: String
+  companyId: Int!
+  counterpartId: Int
+  createdById: Int!
+  postedById: Int
+  postedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  lines: [EntryLine!]!
+}
+
+type EntryLine {
+  id: Int!
+  journalEntryId: Int!
+  accountId: Int!
+  debitAmount: Float!
+  creditAmount: Float!
+  currencyCode: String!
+  currencyAmount: Float
+  exchangeRate: Float
+  baseAmount: Float!
+  vatAmount: Float!
+  quantity: Float
+  description: String
+  lineOrder: Int!
+  counterpartId: Int
+  vatRateId: Int
+  createdAt: DateTime!
+}
+
+# === Report Types ===
+
+type TurnoverSheet {
+  companyId: Int!
+  fromDate: String!
+  toDate: String!
+  accounts: [TurnoverSheetAccount!]!
+}
+
+type TurnoverSheetAccount {
+  code: String!
+  name: String!
+  openingDebit: Float!
+  openingCredit: Float!
+  periodDebit: Float!
+  periodCredit: Float!
+  closingDebit: Float!
+  closingCredit: Float!
+}
+
+type GeneralLedger {
+  account: Account!
+  fromDate: String!
+  toDate: String!
+  openingDebit: Float!
+  openingCredit: Float!
+  openingBalance: Float!
+  transactions: [GeneralLedgerTransaction!]!
+  closingDebit: Float!
+  closingCredit: Float!
+  closingBalance: Float!
+}
+
+type GeneralLedgerTransaction {
+  date: DateTime!
+  entryNumber: Int!
+  documentNumber: String
+  description: String
+  debit: Float!
+  credit: Float!
+  balance: Float!
+}
+
+# === Input Types ===
+
+input CreateCompanyInput {
+  name: String!
+  eik: String!
+  vatNumber: String
+  address: String
+  city: String
+}
+
+input UpdateCompanyInput {
+  name: String
+  vatNumber: String
+  address: String
+  city: String
+}
+
+input CreateAccountInput {
+  code: String!
+  name: String!
+  description: String
+  accountType: String
+  companyId: Int!
+  parentId: Int
+}
+
+input UpdateAccountInput {
+  name: String
+  description: String
+  accountType: String
+}
+
+input CreateCounterpartInput {
+  name: String!
+  eik: String
+  vatNumber: String
+  address: String
+  city: String
+  companyId: Int!
+}
+
+input UpdateCounterpartInput {
+  name: String
+  eik: String
+  vatNumber: String
+  address: String
+  city: String
+}
+
+input CreateJournalEntryInput {
+  companyId: Int!
+  documentDate: String
+  accountingDate: String
+  documentNumber: String
+  description: String!
+  documentType: String
+  counterpartId: Int
+  lines: [CreateEntryLineInput!]
+}
+
+input UpdateJournalEntryInput {
+  documentDate: String
+  documentNumber: String
+  description: String
+  counterpartId: Int
+}
+
+input CreateEntryLineInput {
+  journalEntryId: Int
+  accountId: Int!
+  debitAmount: Float
+  creditAmount: Float
+  description: String
+  counterpartId: Int
+  currencyCode: String
+  currencyAmount: Float
+  exchangeRate: Float
+}
