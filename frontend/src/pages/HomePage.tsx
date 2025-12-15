@@ -1,120 +1,227 @@
-import { Link as RouterLink } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  Grid,
-  Heading,
-  Text,
-  VStack,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { companiesApi } from '../api/companies';
+import { currenciesApi } from '../api/currencies';
+import { fixedAssetCategoriesApi } from '../api/fixedAssetCategories';
 import { useCompany } from '../contexts/CompanyContext';
+import type { Company, Currency, FixedAssetCategory } from '../types';
 
-// Simple icons
-const AccountsIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-  </svg>
-);
-
-const CounterpartsIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-  </svg>
-);
-
-const JournalIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-  </svg>
-);
-
-interface DashboardCardProps {
-  to: string;
+interface SummaryCardProps {
   title: string;
-  description: string;
-  icon: React.ReactNode;
+  value: string | number;
+  hint: string;
+  accent: string;
 }
 
-function DashboardCard({ to, title, description, icon }: DashboardCardProps) {
-  const cardBg = useColorModeValue('white', 'gray.800');
-  const hoverBg = useColorModeValue('gray.50', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-  const iconColor = useColorModeValue('brand.500', 'brand.400');
-
+function SummaryCard({ title, value, hint, accent }: SummaryCardProps) {
   return (
-    <Box
-      as={RouterLink}
-      to={to}
-      bg={cardBg}
-      p={6}
-      borderRadius="xl"
-      border="1px"
-      borderColor={borderColor}
-      transition="all 0.2s"
-      _hover={{
-        transform: 'translateY(-2px)',
-        shadow: 'lg',
-        borderColor: 'brand.500',
-        bg: hoverBg,
-      }}
-    >
-      <VStack align="start" spacing={3}>
-        <Box color={iconColor}>{icon}</Box>
-        <Heading size="md">{title}</Heading>
-        <Text color="gray.500" fontSize="sm">{description}</Text>
-      </VStack>
-    </Box>
+    <div className="bg-white border border-gray-100 shadow-sm rounded-lg px-5 py-4 flex flex-col justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="mt-2 text-2xl font-semibold text-gray-900">{value}</p>
+      </div>
+      <p className={`mt-4 text-xs font-medium px-2 py-1 rounded-full inline-flex ${accent}`}>
+        {hint}
+      </p>
+    </div>
   );
 }
 
 export default function HomePage() {
-  const { currentCompany } = useCompany();
+  const { companyId } = useCompany();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [categories, setCategories] = useState<FixedAssetCategory[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (!currentCompany) {
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [companiesData, currenciesData] = await Promise.all([
+          companiesApi.getAll(),
+          currenciesApi.getAll(),
+        ]);
+        setCompanies(companiesData);
+        setCurrencies(currenciesData);
+
+        if (companyId) {
+          const categoriesData = await fixedAssetCategoriesApi.getFixedAssetCategories(companyId);
+          setCategories(categoriesData);
+        }
+      } catch (error) {
+        console.error("Failed to fetch data", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [companyId]);
+
+  const baseCurrency = currencies.find((c: Currency) => c.isBaseCurrency);
+
+  if (loading) {
     return (
-      <VStack spacing={6} align="center" py={10}>
-        <Heading size="xl">Добре дошли в Baraba</Heading>
-        <Text color="gray.500" fontSize="lg">
-          Моля, изберете фирма за да продължите.
-        </Text>
-        <Button as={RouterLink} to="/companies" colorScheme="brand" size="lg">
-          Изберете фирма
-        </Button>
-      </VStack>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
+      </div>
     );
   }
 
   return (
-    <VStack spacing={8} align="stretch">
-      <Box>
-        <Heading size="lg" mb={2}>{currentCompany.name}</Heading>
-        <Text color="gray.500">ЕИК: {currentCompany.eik}</Text>
-        {currentCompany.vatNumber && (
-          <Text color="gray.500">ДДС номер: {currentCompany.vatNumber}</Text>
-        )}
-      </Box>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Начално табло</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Обобщение на системата • EUR базова валута (България в еврозоната от 2025)
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/journal/entries/new"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+          >
+            📝 Нов запис
+          </Link>
+          <Link
+            to="/companies"
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            🏢 Компании
+          </Link>
+        </div>
+      </div>
 
-      <Grid templateColumns="repeat(auto-fill, minmax(280px, 1fr))" gap={6}>
-        <DashboardCard
-          to="/accounts"
-          title="Сметки"
-          description="Сметкоплан и настройка на счетоводни сметки"
-          icon={<AccountsIcon />}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          title="Компании"
+          value={companies.length}
+          hint={companies.length > 0 ? `${companies.filter((c: Company) => c.isActive).length} активни` : 'Създайте първата компания'}
+          accent="bg-blue-100 text-blue-700"
         />
-        <DashboardCard
-          to="/counterparts"
-          title="Контрагенти"
-          description="Клиенти, доставчици и партньори"
-          icon={<CounterpartsIcon />}
+        <SummaryCard
+          title="Базова валута"
+          value={baseCurrency?.code || 'EUR'}
+          hint="Фиксиран курс BGN/EUR: 1.95583"
+          accent="bg-green-100 text-green-700"
         />
-        <DashboardCard
-          to="/journal"
-          title="Дневник"
-          description="Счетоводни записи и документи"
-          icon={<JournalIcon />}
+        <SummaryCard
+          title="Валути"
+          value={currencies.length}
+          hint="Курсове от ЕЦБ"
+          accent="bg-purple-100 text-purple-700"
         />
-      </Grid>
-    </VStack>
+        <SummaryCard
+          title="Категории ДА"
+          value={categories.length}
+          hint="Данъчни категории по ЗКПО"
+          accent="bg-teal-100 text-teal-700"
+        />
+      </div>
+
+      {/* Main Content */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Companies List */}
+        <div className="xl:col-span-2 bg-white border border-gray-100 shadow-sm rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Компании</h3>
+            <Link to="/companies" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+              Управление →
+            </Link>
+          </div>
+          {companies.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-4">Няма създадени компании</p>
+              <Link
+                to="/companies"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Създай компания
+              </Link>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {companies.slice(0, 5).map((company: Company) => (
+                <li key={company.id} className="py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{company.name}</p>
+                    <p className="text-xs text-gray-500">
+                      ЕИК: {company.eik} {company.vatNumber && `• ДДС: ${company.vatNumber}`}
+                      {company.city && ` • ${company.city}`}
+                    </p>
+                  </div>
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${
+                    company.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {company.isActive ? 'Активна' : 'Неактивна'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white border border-gray-100 shadow-sm rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Бързи действия</h3>
+          <div className="space-y-3">
+            <Link
+              to="/journal/entries/new"
+              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-2xl mr-3">📝</span>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Нов счетоводен запис</p>
+                <p className="text-xs text-gray-500">Създай дневникова статия</p>
+              </div>
+            </Link>
+            <Link
+              to="/accounts"
+              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-2xl mr-3">🗂️</span>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Сметкоплан</p>
+                <p className="text-xs text-gray-500">Управление на сметки</p>
+              </div>
+            </Link>
+            <Link
+              to="/counterparts"
+              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-2xl mr-3">👥</span>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Контрагенти</p>
+                <p className="text-xs text-gray-500">Клиенти и доставчици</p>
+              </div>
+            </Link>
+            <Link
+              to="/reports"
+              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-2xl mr-3">📄</span>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Отчети</p>
+                <p className="text-xs text-gray-500">Справки и отчети</p>
+              </div>
+            </Link>
+            <Link
+              to="/settings"
+              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-2xl mr-3">⚙️</span>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Настройки</p>
+                <p className="text-xs text-gray-500">Конфигурация на системата</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

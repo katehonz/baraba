@@ -85,6 +85,8 @@ export default function Layout() {
                 <NavLink to="/accounts">Сметки</NavLink>
                 <NavLink to="/counterparts">Контрагенти</NavLink>
                 <NavLink to="/journal">Дневник</NavLink>
+                <NavLink to="/reports">Отчети</NavLink>
+                <NavLink to="/settings">Настройки</NavLink>
               </>
             )}
           </VStack>

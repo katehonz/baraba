@@ -3,49 +3,24 @@
 
 import norm/[model, postgres]
 import std/times
-import ../models/[user, currency, company, account, counterpart, vatrate, journal, exchangerate]
-import ../services/auth
-import config
+import ../models/[user, currency, company, account, counterpart, vatrate, journal, exchangerate, audit_log, fixed_asset_category]
 
-proc runMigrations*() =
-  echo "Starting database migrations..."
-
-  let db = openDb()
-  try:
-    # Create tables in dependency order
-    echo "Creating UserGroup table..."
-    db.createTables(newUserGroup())
-
-    echo "Creating User table..."
-    db.createTables(newUser())
-
-    echo "Creating Currency table..."
-    db.createTables(newCurrency())
-
-    echo "Creating Company table..."
-    db.createTables(newCompany())
-
-    echo "Creating Account table..."
-    db.createTables(newAccount())
-
-    echo "Creating Counterpart table..."
-    db.createTables(newCounterpart())
-
-    echo "Creating VatRate table..."
-    db.createTables(newVatRate())
-
-    echo "Creating JournalEntry table..."
-    db.createTables(newJournalEntry())
-
-    echo "Creating EntryLine table..."
-    db.createTables(newEntryLine())
-
-    echo "Creating ExchangeRate table..."
-    db.createTables(newExchangeRate())
-  finally:
-    close(db)
-
-  echo "All migrations completed successfully!"
+proc runMigration*() =
+  let db = getDbConn()
+  echo "Starting migration..."
+  db.createTables(newUser())
+  db.createTables(newCurrency())
+  db.createTables(newCompany())
+  db.createTables(newAccount())
+  db.createTables(newCounterpart())
+  db.createTables(newVatRate())
+  db.createTables(newJournalEntry())
+  db.createTables(newEntryLine())
+  db.createTables(newExchangeRate())
+  db.createTables(newAuditLog())
+  db.createTables(newFixedAssetCategory())
+  echo "Migration finished."
+  db.close()
 
 proc seedInitialData*() =
   echo "Seeding initial data..."

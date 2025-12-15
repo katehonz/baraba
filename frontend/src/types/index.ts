@@ -123,6 +123,12 @@ export interface CreateCounterpartInput {
   counterpartType?: CounterpartType;
   isCustomer?: boolean;
   isSupplier?: boolean;
+export interface FixedAssetCategory {
+  id: number;
+  name: string;
+  description: string;
+  minDepreciationRate: number;
+  maxDepreciationRate: number;
   companyId: number;
 }
 
@@ -172,6 +178,8 @@ export interface CreateEntryLineInput {
   debitAmount?: number;
   creditAmount?: number;
   currencyCode?: string;
+  currencyAmount?: number;
+  exchangeRate?: number;
   description?: string;
   accountId: number;
 }
@@ -185,4 +193,25 @@ export interface Currency {
   symbol: string;
   isActive: boolean;
   isBaseCurrency: boolean;
+}
+
+export interface ExchangeRate {
+  id: number;
+  fromCurrency: { code: string };
+  toCurrency: { code: string };
+  rate: number;
+  validDate: string;
+  rateSource: string;
+}
+
+export interface VatRate {
+  id: number;
+  code: string;
+  name: string;
+  rate: number;
+  isDefault: boolean;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  companyId: number;
 }

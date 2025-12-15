@@ -18,6 +18,11 @@ export const journalApi = {
     return data;
   },
 
+  update: async (id: number, input: Partial<CreateJournalEntryInput>): Promise<JournalEntry> => {
+    const { data } = await api.put<JournalEntry>(`/api/journal-entries/${id}`, input);
+    return data;
+  },
+
   post: async (id: number): Promise<JournalEntry> => {
     const { data } = await api.post<JournalEntry>(`/api/journal-entries/${id}/post`);
     return data;

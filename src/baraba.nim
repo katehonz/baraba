@@ -12,6 +12,16 @@ import utils/json_utils
 import graphql/resolvers
 import "vendor/nim-graphql/graphql"
 
+# Import route handlers
+import routes/currency_routes
+import routes/audit_log_routes
+import routes/exchange_rate_routes
+import routes/vat_rate_routes
+import routes/user_routes
+import routes/user_group_routes
+import routes/fixed_asset_category_routes
+import routes/vies_routes
+
 var graphqlCtx: GraphqlRef
 
 const corsHeaders* = @{
@@ -32,11 +42,28 @@ router mainRouter:
   options "/api/auth/login": resp Http200, corsHeaders, ""
   options "/api/auth/register": resp Http200, corsHeaders, ""
   options "/api/auth/me": resp Http200, corsHeaders, ""
+  options "/api/auth/recover-password": resp Http200, corsHeaders, ""
+  options "/api/auth/reset-password": resp Http200, corsHeaders, ""
   options "/api/companies": resp Http200, corsHeaders, ""
   options "/api/companies/@id": resp Http200, corsHeaders, ""
   options "/api/accounts": resp Http200, corsHeaders, ""
   options "/api/accounts/company/@companyId": resp Http200, corsHeaders, ""
   options "/api/counterparts": resp Http200, corsHeaders, ""
+  options "/api/currencies": resp Http200, corsHeaders, ""
+  options "/api/currencies/@id": resp Http200, corsHeaders, ""
+  options "/api/audit-logs": resp Http200, corsHeaders, ""
+  options "/api/audit-log-stats": resp Http200, corsHeaders, ""
+  options "/api/monthly-stats": resp Http200, corsHeaders, ""
+  options "/api/exchange-rates": resp Http200, corsHeaders, ""
+  options "/api/exchange-rates/fetch-ecb": resp Http200, corsHeaders, ""
+  options "/api/vat-rates": resp Http200, corsHeaders, ""
+  options "/api/vat-rates/@id": resp Http200, corsHeaders, ""
+  options "/api/users": resp Http200, corsHeaders, ""
+  options "/api/users/@id": resp Http200, corsHeaders, ""
+  options "/api/users/@id/reset-password": resp Http200, corsHeaders, ""
+  options "/api/user-groups": resp Http200, corsHeaders, ""
+  options "/api/fixed-asset-categories": resp Http200, corsHeaders, ""
+  options "/api/validate-vat": resp Http200, corsHeaders, ""
   options "/api/journal-entries": resp Http200, corsHeaders, ""
   options "/api/journal-entries/@id": resp Http200, corsHeaders, ""
   options "/api/journal-entries/@id/post": resp Http200, corsHeaders, ""
@@ -124,6 +151,34 @@ router mainRouter:
     else:
       resp Http404, jsonCors, $(%*{"error": "Потребителят не е намерен"})
 
+  post "/api/auth/recover-password":
+    let body = parseJson(request.body)
+    let email = body["email"].getStr()
+    
+    let db = getDbConn()
+    let tokenOpt = recoverPassword(db, email)
+    releaseDbConn(db)
+
+    if tokenOpt.isSome:
+      resp Http200, jsonCors, $(%*{"message": "Изпратен е линк за възстановяване на паролата на вашия имейл."})
+    else:
+      resp Http404, jsonCors, $(%*{"error": "Потребител с този имейл не е намерен"})
+
+  post "/api/auth/reset-password":
+    let body = parseJson(request.body)
+    let email = body["email"].getStr()
+    let token = body["token"].getStr()
+    let newPassword = body["password"].getStr()
+
+    let db = getDbConn()
+    let success = resetPassword(db, email, token, newPassword)
+    releaseDbConn(db)
+
+    if success:
+      resp Http200, jsonCors, $(%*{"message": "Паролата е променена успешно!"})
+    else:
+      resp Http400, jsonCors, $(%*{"error": "Невалиден токен или изтекло време за възстановяване"})
+
   # =====================
   # COMPANY ROUTES
   # =====================
@@ -144,7 +199,29 @@ router mainRouter:
     try:
       var company = newCompany()
       db.select(company, "id = $1", companyId)
-      resp Http200, jsonCors, $toJson(company)
+      
+      var companyJson = toJson(company)
+      let fields = [
+        ("defaultCashAccountId", "defaultCashAccount"),
+        ("defaultCustomersAccountId", "defaultCustomersAccount"),
+        ("defaultSuppliersAccountId", "defaultSuppliersAccount"),
+        ("defaultSalesRevenueAccountId", "defaultSalesRevenueAccount"),
+        ("defaultVatPurchaseAccountId", "defaultVatPurchaseAccount"),
+        ("defaultVatSalesAccountId", "defaultVatSalesAccount"),
+        ("defaultCardPaymentPurchaseAccountId", "defaultCardPaymentPurchaseAccount"),
+        ("defaultCardPaymentSalesAccountId", "defaultCardPaymentSalesAccount")
+      ]
+
+      for (field, jsonField) in fields:
+        let accountIdOpt = company.getAccountId(field)
+        if accountIdOpt.isSome:
+          var account = newAccount()
+          db.select(account, "id = $1", accountIdOpt.get)
+          companyJson[jsonField] = toJson(account)
+        else:
+          companyJson[jsonField] = %*{}
+
+      resp Http200, jsonCors, $companyJson
     except:
       resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
     finally:
@@ -190,6 +267,40 @@ router mainRouter:
       resp Http200, jsonCors, $toJson(company)
     except:
       resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
+    finally:
+      releaseDbConn(db)
+
+  put "/api/companies/@id/default-accounts":
+    let companyId = parseInt(@"id")
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var company = newCompany()
+      db.select(company, "id = $1", companyId)
+
+      let fields = [
+        "defaultCashAccountId",
+        "defaultCustomersAccountId",
+        "defaultSuppliersAccountId",
+        "defaultSalesRevenueAccountId",
+        "defaultVatPurchaseAccountId",
+        "defaultVatSalesAccountId",
+        "defaultCardPaymentPurchaseAccountId",
+        "defaultCardPaymentSalesAccountId"
+      ]
+
+      for field in fields:
+        if body.hasKey(field):
+          if body[field].kind == JNull or body[field].getInt() == 0:
+            company.setAccountId(field, none(int64))
+          else:
+            company.setAccountId(field, some(body[field].getInt()))
+      
+      company.updated_at = now()
+      db.update(company)
+      resp Http200, jsonCors, $toJson(company)
+    except:
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -322,6 +433,162 @@ router mainRouter:
       resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
+
+  # =====================
+  # CURRENCY ROUTES
+  # =====================
+  get "/api/currencies":
+    let result = await getCurrencies()
+    resp Http200, jsonCors, result
+
+  post "/api/currencies":
+    let body = parseJson(request.body)
+    let code = body["code"].getStr()
+    let name = body["name"].getStr()
+    let nameBg = body["nameBg"].getStr()
+    let symbol = body["symbol"].getStr()
+    let decimalPlaces = body["decimalPlaces"].getInt()
+    let isBaseCurrency = body["isBaseCurrency"].getBool()
+    let result = await createCurrency(code, name, nameBg, symbol, decimalPlaces, isBaseCurrency)
+    resp Http201, jsonCors, result
+  
+  put "/api/currencies/@id":
+    let id = parseInt(@"id")
+    let body = parseJson(request.body)
+    let isActive = body["isActive"].getBool()
+    let result = await updateCurrency(id, isActive)
+    resp Http200, jsonCors, result
+
+  # =====================
+  # AUDIT LOG ROUTES
+  # =====================
+  get "/api/audit-logs":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let fromDate = request.params.getOrDefault("fromDate", "")
+    let toDate = request.params.getOrDefault("toDate", "")
+    let search = request.params.getOrDefault("search", "")
+    let action = request.params.getOrDefault("action", "")
+    let offset = request.params.getOrDefault("offset", "0").parseInt
+    let limit = request.params.getOrDefault("limit", "50").parseInt
+    let result = await getAuditLogs(companyId, fromDate, toDate, search, action, offset, limit)
+    resp Http200, jsonCors, result
+
+  get "/api/audit-log-stats":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let days = request.params.getOrDefault("days", "30").parseInt
+    let result = await getAuditLogStats(companyId, days)
+    resp Http200, jsonCors, result
+
+  get "/api/monthly-stats":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let fromYear = request.params.getOrDefault("fromYear", "0").parseInt
+    let fromMonth = request.params.getOrDefault("fromMonth", "0").parseInt
+    let toYear = request.params.getOrDefault("toYear", "0").parseInt
+    let toMonth = request.params.getOrDefault("toMonth", "0").parseInt
+    let result = await getMonthlyTransactionStats(companyId, fromYear, fromMonth, toYear, toMonth)
+    resp Http200, jsonCors, result
+
+  # =====================
+  # EXCHANGE RATE ROUTES
+  # =====================
+  get "/api/exchange-rates":
+    let result = await getExchangeRates()
+    resp Http200, jsonCors, result
+  
+  post "/api/exchange-rates/fetch-ecb":
+    let result = await fetchEcbRates()
+    resp Http200, jsonCors, result
+
+  # =====================
+  # VAT RATE ROUTES
+  # =====================
+  get "/api/vat-rates":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let result = await getVatRates(companyId)
+    resp Http200, jsonCors, result
+
+  post "/api/vat-rates":
+    let body = parseJson(request.body)
+    let companyId = body["companyId"].getInt()
+    let code = body["code"].getStr()
+    let name = body["name"].getStr()
+    let rate = body["rate"].getFloat()
+    let effectiveFrom = body["effectiveFrom"].getStr()
+    let isDefault = body["isDefault"].getBool()
+    let result = await createVatRate(companyId, code, name, rate, effectiveFrom, isDefault)
+    resp Http201, jsonCors, result
+  
+  delete "/api/vat-rates/@id":
+    let id = parseInt(@"id")
+    let result = await deleteVatRate(id)
+    resp Http200, jsonCors, result
+
+  # =====================
+  # USER ROUTES
+  # =====================
+  get "/api/users":
+    let result = await getUsers()
+    resp Http200, jsonCors, result
+
+  post "/api/users":
+    let body = parseJson(request.body)
+    let username = body["username"].getStr()
+    let email = body["email"].getStr()
+    let password = body["password"].getStr()
+    let firstName = body["firstName"].getStr()
+    let lastName = body["lastName"].getStr()
+    let groupId = body["groupId"].getInt()
+    let isActive = body["isActive"].getBool()
+    let result = await createUser(username, email, password, firstName, lastName, groupId, isActive)
+    resp Http201, jsonCors, result
+
+  put "/api/users/@id":
+    let id = parseInt(@"id")
+    let body = parseJson(request.body)
+    let username = body["username"].getStr()
+    let email = body["email"].getStr()
+    let firstName = body["firstName"].getStr()
+    let lastName = body["lastName"].getStr()
+    let groupId = body["groupId"].getInt()
+    let isActive = body["isActive"].getBool()
+    let result = await updateUser(id, username, email, firstName, lastName, groupId, isActive)
+    resp Http200, jsonCors, result
+  
+  delete "/api/users/@id":
+    let id = parseInt(@"id")
+    let result = await deleteUser(id)
+    resp Http200, jsonCors, result
+  
+  post "/api/users/@id/reset-password":
+    let id = parseInt(@"id")
+    let body = parseJson(request.body)
+    let newPassword = body["newPassword"].getStr()
+    let result = await resetUserPassword(id, newPassword)
+    resp Http200, jsonCors, result
+
+  # =====================
+  # USER GROUP ROUTES
+  # =====================
+  get "/api/user-groups":
+    let result = await getUserGroups()
+    resp Http200, jsonCors, result
+
+  # =====================
+  # FIXED ASSET CATEGORY ROUTES
+  # =====================
+  get "/api/fixed-asset-categories":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let result = await getFixedAssetCategories(companyId)
+    resp Http200, jsonCors, result
+
+  # =====================
+  # VIES ROUTES
+  # =====================
+  post "/api/validate-vat":
+    let body = parseJson(request.body)
+    let vatNumber = body["vatNumber"].getStr()
+    let result = await validateVat(vatNumber)
+    resp Http200, jsonCors, result
 
   # =====================
   # JOURNAL ROUTES

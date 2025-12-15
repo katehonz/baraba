@@ -6,11 +6,23 @@ import { CompanyProvider } from './contexts/CompanyContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import RecoverPasswordPage from './pages/auth/RecoverPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import HomePage from './pages/HomePage';
 import CompaniesPage from './pages/companies/CompaniesPage';
 import AccountsPage from './pages/accounts/AccountsPage';
 import CounterpartsPage from './pages/counterparts/CounterpartsPage';
-import JournalPage from './pages/journal/JournalPage';
+import JournalDashboardPage from './pages/journal/JournalDashboardPage';
+import JournalEntriesPage from './pages/journal/JournalEntriesPage';
+import JournalEntryFormPage from './pages/journal/JournalEntryFormPage';
+import ReportsPage from './pages/reports/ReportsPage';
+import CounterpartyReportsPage from './pages/reports/CounterpartyReportsPage';
+import AuditLogsPage from './pages/reports/AuditLogsPage';
+import MonthlyStatsPage from './pages/reports/MonthlyStatsPage';
+import SettingsPage from './pages/settings/SettingsPage';
+import CurrenciesPage from './pages/settings/CurrenciesPage';
+import VatRatesPage from './pages/settings/VatRatesPage';
+import UsersPage from './pages/settings/UsersPage';
 
 const queryClient = new QueryClient();
 
@@ -40,6 +52,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/recover-password" element={<RecoverPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       <Route
         path="/"
         element={
@@ -52,7 +66,18 @@ function AppRoutes() {
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="accounts" element={<AccountsPage />} />
         <Route path="counterparts" element={<CounterpartsPage />} />
-        <Route path="journal" element={<JournalPage />} />
+        <Route path="journal" element={<JournalDashboardPage />} />
+        <Route path="journal/entries" element={<JournalEntriesPage />} />
+        <Route path="journal/entries/new" element={<JournalEntryFormPage />} />
+        <Route path="journal/entries/edit/:id" element={<JournalEntryFormPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports/counterparts" element={<CounterpartyReportsPage />} />
+        <Route path="reports/audit-logs" element={<AuditLogsPage />} />
+        <Route path="reports/monthly-stats" element={<MonthlyStatsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings/currencies" element={<CurrenciesPage />} />
+        <Route path="settings/vat-rates" element={<VatRatesPage />} />
+        <Route path="settings/users" element={<UsersPage />} />
       </Route>
     </Routes>
   );
