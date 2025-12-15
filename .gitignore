@@ -1,0 +1,39 @@
+# Old Java project
+old/
+
+# Nim build artifacts
+src/baraba
+src/db/migrate
+*.exe
+nimcache/
+nimblecache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# PostgreSQL
+*.sql.backup
+baraba
+src/test_db
