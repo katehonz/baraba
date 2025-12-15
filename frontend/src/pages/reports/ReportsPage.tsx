@@ -1,5 +1,28 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Heading,
+  Text,
+  SimpleGrid,
+  Flex,
+  Button,
+  VStack,
+  HStack,
+  Spinner,
+  useColorModeValue,
+  Link,
+  Select,
+  Input,
+  Checkbox,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
+} from '@chakra-ui/react';
 import { reportsApi } from '../../api/reports';
 import { accountsApi } from '../../api/accounts';
 import { useCompany } from '../../contexts/CompanyContext';
@@ -19,13 +42,13 @@ const REPORT_TYPES: ReportConfig[] = [
     id: 'turnover',
     name: 'Оборотна ведомост',
     description: 'Обобщена справка за обороти и салда по сметки',
-    icon: '📊',
+    icon: '~',
   },
   {
     id: 'generalLedger',
     name: 'Главна книга',
     description: 'Детайлна справка по сметки с всички движения',
-    icon: '📖',
+    icon: '#',
   },
 ];
 
@@ -102,6 +125,9 @@ export default function Reports() {
   const [reportData, setReportData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+
   useEffect(() => {
     if (companyId) {
       accountsApi.getByCompany(companyId).then(setAccounts);
@@ -159,7 +185,6 @@ export default function Reports() {
     return num.toLocaleString('bg-BG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Render report content based on selected type
   const renderReportContent = () => {
     if (!reportData) return null;
 
@@ -167,92 +192,90 @@ export default function Reports() {
       case 'turnover':
         const ts = reportData;
         return (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-900">Оборотна ведомост</h3>
-              <p className="text-sm text-gray-500">
+          <Box bg={cardBg} borderRadius="lg" shadow="sm" overflow="hidden">
+            <Box px={6} py={4} borderBottom="1px" borderColor={borderColor} bg={useColorModeValue('gray.50', 'gray.700')}>
+              <Heading size="md">Оборотна ведомост</Heading>
+              <Text fontSize="sm" color="gray.500">
                 {ts.companyName} | Период: {ts.fromDate} - {ts.toDate}
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Сметка</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase" colSpan={2}>Начално салдо</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase" colSpan={2}>Обороти</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase" colSpan={2}>Крайно салдо</th>
-                  </tr>
-                  <tr className="bg-gray-100">
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Код / Наименование</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Дебит</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Кредит</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Дебит</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Кредит</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Дебит</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Кредит</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+              </Text>
+            </Box>
+            <TableContainer>
+              <Table size="sm">
+                <Thead bg={useColorModeValue('gray.50', 'gray.700')}>
+                  <Tr>
+                    <Th>Сметка</Th>
+                    <Th isNumeric colSpan={2}>Начално салдо</Th>
+                    <Th isNumeric colSpan={2}>Обороти</Th>
+                    <Th isNumeric colSpan={2}>Крайно салдо</Th>
+                  </Tr>
+                  <Tr bg={useColorModeValue('gray.100', 'gray.600')}>
+                    <Th fontSize="xs">Код / Наименование</Th>
+                    <Th fontSize="xs" isNumeric>Дебит</Th>
+                    <Th fontSize="xs" isNumeric>Кредит</Th>
+                    <Th fontSize="xs" isNumeric>Дебит</Th>
+                    <Th fontSize="xs" isNumeric>Кредит</Th>
+                    <Th fontSize="xs" isNumeric>Дебит</Th>
+                    <Th fontSize="xs" isNumeric>Кредит</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
                   {ts.accounts.map((entry: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 text-sm">
-                        <span className="font-mono font-medium text-gray-700">{entry.code}</span>
-                        <span className="ml-2 text-gray-600">{entry.name}</span>
-                      </td>
-                      <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.openingDebit)}</td>
-                      <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.openingCredit)}</td>
-                      <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.periodDebit)}</td>
-                      <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.periodCredit)}</td>
-                      <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.closingDebit)}</td>
-                      <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.closingCredit)}</td>
-                    </tr>
+                    <Tr key={idx} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                      <Td>
+                        <Text as="span" fontFamily="mono" fontWeight="medium" color="gray.700">{entry.code}</Text>
+                        <Text as="span" ml={2} color="gray.600">{entry.name}</Text>
+                      </Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.openingDebit)}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.openingCredit)}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.periodDebit)}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.periodCredit)}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.closingDebit)}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.closingCredit)}</Td>
+                    </Tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </Tbody>
+              </Table>
+            </TableContainer>
+          </Box>
         );
 
       case 'generalLedger':
         const gl = reportData;
         return (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-900">Главна книга</h3>
-              <p className="text-sm text-gray-500">
+          <Box bg={cardBg} borderRadius="lg" shadow="sm" overflow="hidden">
+            <Box px={6} py={4} borderBottom="1px" borderColor={borderColor} bg={useColorModeValue('gray.50', 'gray.700')}>
+              <Heading size="md">Главна книга</Heading>
+              <Text fontSize="sm" color="gray.500">
                 {gl.account.name} | Период: {gl.fromDate} - {gl.toDate}
-              </p>
-            </div>
-            <div className="divide-y divide-gray-200">
-                <div className="bg-white">
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Дата</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Документ</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Описание</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Дебит</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Кредит</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Салдо</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {gl.transactions.map((entry: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 text-sm">{new Date(entry.date).toLocaleDateString('bg-BG')}</td>
-                            <td className="px-4 py-2 text-sm">{entry.documentNumber || entry.entryNumber}</td>
-                            <td className="px-4 py-2 text-sm text-gray-600">{entry.description}</td>
-                            <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.debit)}</td>
-                            <td className="px-4 py-2 text-sm text-right font-mono">{formatAmount(entry.credit)}</td>
-                            <td className="px-4 py-2 text-sm text-right font-mono font-semibold">{formatAmount(entry.balance)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                </div>
-            </div>
-          </div>
+              </Text>
+            </Box>
+            <TableContainer>
+              <Table size="sm">
+                <Thead bg={useColorModeValue('gray.50', 'gray.700')}>
+                  <Tr>
+                    <Th>Дата</Th>
+                    <Th>Документ</Th>
+                    <Th>Описание</Th>
+                    <Th isNumeric>Дебит</Th>
+                    <Th isNumeric>Кредит</Th>
+                    <Th isNumeric>Салдо</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {gl.transactions.map((entry: any, idx: number) => (
+                    <Tr key={idx} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                      <Td>{new Date(entry.date).toLocaleDateString('bg-BG')}</Td>
+                      <Td>{entry.documentNumber || entry.entryNumber}</Td>
+                      <Td color="gray.600">{entry.description}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.debit)}</Td>
+                      <Td isNumeric fontFamily="mono">{formatAmount(entry.credit)}</Td>
+                      <Td isNumeric fontFamily="mono" fontWeight="semibold">{formatAmount(entry.balance)}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </TableContainer>
+          </Box>
         );
       default:
         return null;
@@ -262,175 +285,150 @@ export default function Reports() {
   const hasReportData = useMemo(() => !!reportData, [reportData]);
 
   return (
-    <div className="space-y-6">
+    <VStack spacing={6} align="stretch">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Отчети</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Генериране на счетоводни справки и отчети
-          </p>
-        </div>
-      </div>
+      <Box>
+        <Heading size="lg">Отчети</Heading>
+        <Text mt={1} fontSize="sm" color="gray.500">
+          Генериране на счетоводни справки и отчети
+        </Text>
+      </Box>
 
       {/* Report Selection */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
         {REPORT_TYPES.map((report) => (
-          <button
+          <Box
             key={report.id}
+            as="button"
             onClick={() => setSelectedReport(report.id)}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
-              selectedReport === report.id
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 bg-white hover:border-gray-300'
-            }`}
+            p={4}
+            borderRadius="lg"
+            border="2px"
+            borderColor={selectedReport === report.id ? 'blue.500' : borderColor}
+            bg={selectedReport === report.id ? 'blue.50' : cardBg}
+            textAlign="left"
+            transition="all 0.2s"
+            _hover={{ borderColor: 'blue.300' }}
           >
-            <div className="text-2xl mb-2">{report.icon}</div>
-            <h3 className="font-semibold text-gray-900">{report.name}</h3>
-            <p className="text-sm text-gray-500 mt-1">{report.description}</p>
-          </button>
+            <Text fontSize="2xl" mb={2}>{report.icon}</Text>
+            <Text fontWeight="semibold">{report.name}</Text>
+            <Text fontSize="sm" color="gray.500" mt={1}>{report.description}</Text>
+          </Box>
         ))}
-        <Link to="/reports/counterparts" className="p-4 rounded-lg border-2 text-left transition-all border-gray-200 bg-white hover:border-gray-300">
-            <div className="text-2xl mb-2">👥</div>
-            <h3 className="font-semibold text-gray-900">Справки по контрагенти</h3>
-            <p className="text-sm text-gray-500 mt-1">Обобщена справка за обороти по контрагенти</p>
+        <Link as={RouterLink} to="/reports/counterparts" _hover={{ textDecoration: 'none' }}>
+          <Box p={4} borderRadius="lg" border="2px" borderColor={borderColor} bg={cardBg} h="full" _hover={{ borderColor: 'gray.300' }}>
+            <Text fontSize="2xl" mb={2}>@</Text>
+            <Text fontWeight="semibold">Справки по контрагенти</Text>
+            <Text fontSize="sm" color="gray.500" mt={1}>Обобщена справка за обороти по контрагенти</Text>
+          </Box>
         </Link>
-        <Link to="/reports/audit-logs" className="p-4 rounded-lg border-2 text-left transition-all border-gray-200 bg-white hover:border-gray-300">
-            <div className="text-2xl mb-2">🛡️</div>
-            <h3 className="font-semibold text-gray-900">Одит лог</h3>
-            <p className="text-sm text-gray-500 mt-1">Проследяване на действията на потребителите</p>
+        <Link as={RouterLink} to="/reports/audit-logs" _hover={{ textDecoration: 'none' }}>
+          <Box p={4} borderRadius="lg" border="2px" borderColor={borderColor} bg={cardBg} h="full" _hover={{ borderColor: 'gray.300' }}>
+            <Text fontSize="2xl" mb={2}>!</Text>
+            <Text fontWeight="semibold">Одит лог</Text>
+            <Text fontSize="sm" color="gray.500" mt={1}>Проследяване на действията на потребителите</Text>
+          </Box>
         </Link>
-        <Link to="/reports/monthly-stats" className="p-4 rounded-lg border-2 text-left transition-all border-gray-200 bg-white hover:border-gray-300">
-            <div className="text-2xl mb-2">📈</div>
-            <h3 className="font-semibold text-gray-900">Месечна статистика</h3>
-            <p className="text-sm text-gray-500 mt-1">Справка за ценообразуване</p>
+        <Link as={RouterLink} to="/reports/monthly-stats" _hover={{ textDecoration: 'none' }}>
+          <Box p={4} borderRadius="lg" border="2px" borderColor={borderColor} bg={cardBg} h="full" _hover={{ borderColor: 'gray.300' }}>
+            <Text fontSize="2xl" mb={2}>^</Text>
+            <Text fontWeight="semibold">Месечна статистика</Text>
+            <Text fontSize="sm" color="gray.500" mt={1}>Справка за ценообразуване</Text>
+          </Box>
         </Link>
-      </div>
+      </SimpleGrid>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Параметри на отчета</h3>
+      <Box bg={cardBg} borderRadius="lg" shadow="sm" p={6}>
+        <Heading size="md" mb={4}>Параметри на отчета</Heading>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Period Preset */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Период</label>
-            <select
-              value={periodPreset}
-              onChange={(e) => handlePresetChange(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            >
+        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" mb={1}>Период</Text>
+            <Select value={periodPreset} onChange={(e) => handlePresetChange(e.target.value)} size="sm">
               {PERIOD_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>{preset.name}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Box>
 
-          {/* Start Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">От дата</label>
-            <input
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" mb={1}>От дата</Text>
+            <Input
               type="date"
               value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                setPeriodPreset('custom');
-              }}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              onChange={(e) => { setStartDate(e.target.value); setPeriodPreset('custom'); }}
+              size="sm"
             />
-          </div>
+          </Box>
 
-          {/* End Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">До дата</label>
-            <input
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" mb={1}>До дата</Text>
+            <Input
               type="date"
               value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-                setPeriodPreset('custom');
-              }}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              onChange={(e) => { setEndDate(e.target.value); setPeriodPreset('custom'); }}
+              size="sm"
             />
-          </div>
+          </Box>
 
-          {/* Account Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Сметка (опционално)</label>
-            <select
-              value={selectedAccountId}
-              onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            >
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" mb={1}>Сметка (опционално)</Text>
+            <Select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} size="sm">
               <option value="">Всички сметки</option>
               {accounts.map((acc: any) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.code} - {acc.name}
-                </option>
+                <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
               ))}
-            </select>
-          </div>
-        </div>
+            </Select>
+          </Box>
+        </SimpleGrid>
 
-        {/* Additional options for Turnover Sheet */}
         {selectedReport === 'turnover' && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-6">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={showZeroBalances}
-                  onChange={(e) => setShowZeroBalances(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Показвай нулеви салда</span>
-              </label>
+          <HStack mt={4} pt={4} borderTop="1px" borderColor={borderColor} spacing={6} wrap="wrap">
+            <Checkbox isChecked={showZeroBalances} onChange={(e) => setShowZeroBalances(e.target.checked)}>
+              <Text fontSize="sm">Показвай нулеви салда</Text>
+            </Checkbox>
 
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-gray-700">Ниво на агрегация:</label>
-                <select
-                  value={accountCodeDepth || ''}
-                  onChange={(e) => setAccountCodeDepth(e.target.value ? parseInt(e.target.value) : null)}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">Всички нива</option>
-                  <option value="1">1 символ</option>
-                  <option value="2">2 символа</option>
-                  <option value="3">3 символа</option>
-                  <option value="4">4 символа</option>
-                </select>
-              </div>
-            </div>
-          </div>
+            <HStack>
+              <Text fontSize="sm">Ниво на агрегация:</Text>
+              <Select
+                value={accountCodeDepth || ''}
+                onChange={(e) => setAccountCodeDepth(e.target.value ? parseInt(e.target.value) : null)}
+                size="sm"
+                w="auto"
+              >
+                <option value="">Всички нива</option>
+                <option value="1">1 символ</option>
+                <option value="2">2 символа</option>
+                <option value="3">3 символа</option>
+                <option value="4">4 символа</option>
+              </Select>
+            </HStack>
+          </HStack>
         )}
 
-        {/* Actions */}
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            onClick={handleGenerateReport}
-            disabled={isLoading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
-          >
-            {isLoading ? 'Зареждане...' : 'Генерирай отчет'}
-          </button>
-        </div>
-      </div>
+        <Box mt={6}>
+          <Button colorScheme="blue" onClick={handleGenerateReport} isLoading={isLoading}>
+            Генерирай отчет
+          </Button>
+        </Box>
+      </Box>
 
       {/* Report Content */}
       {isLoading && (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-        </div>
+        <Flex align="center" justify="center" h="64">
+          <Spinner size="lg" color="blue.500" />
+        </Flex>
       )}
 
       {!isLoading && renderReportContent()}
 
       {!isLoading && !hasReportData && (
-        <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
-          <div className="text-4xl mb-4">📊</div>
-          <p>Изберете параметри и натиснете "Генерирай отчет"</p>
-        </div>
+        <Box bg={cardBg} borderRadius="lg" shadow="sm" p={12} textAlign="center">
+          <Text fontSize="4xl" mb={4}>~</Text>
+          <Text color="gray.500">Изберете параметри и натиснете "Генерирай отчет"</Text>
+        </Box>
       )}
-    </div>
+    </VStack>
   );
 }

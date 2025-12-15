@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Heading,
+  Text,
+  Flex,
+  Button,
+  VStack,
+  useColorModeValue,
+  Link,
+  Select,
+  SimpleGrid,
+  useToast,
+} from '@chakra-ui/react';
 import { settingsApi } from '../../api/settings';
 import type { DefaultAccounts } from '../../api/settings';
 import { accountsApi } from '../../api/accounts';
@@ -10,11 +23,18 @@ import type { Account, Currency } from '../../types';
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('accounting');
   const { companyId } = useCompany();
+  const toast = useToast();
 
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccounts>({});
   const [saving, setSaving] = useState(false);
+
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const activeBg = useColorModeValue('blue.50', 'blue.900');
+  const activeColor = useColorModeValue('blue.700', 'blue.200');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
   useEffect(() => {
     currenciesApi.getAll().then(setCurrencies);
@@ -30,7 +50,7 @@ export default function Settings() {
           defaultVatSalesAccountId: data.defaultVatSalesAccount?.id,
           defaultCardPaymentPurchaseAccountId: data.defaultCardPaymentPurchaseAccount?.id,
           defaultCardPaymentSalesAccountId: data.defaultCardPaymentSalesAccount?.id,
-        })
+        });
       });
     }
   }, [companyId]);
@@ -46,19 +66,29 @@ export default function Settings() {
     setSaving(true);
     try {
       await settingsApi.updateDefaultAccounts(companyId, defaultAccounts);
-      alert('Настройките са запазени успешно!');
+      toast({
+        title: 'Успех',
+        description: 'Настройките са запазени успешно!',
+        status: 'success',
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Error saving default accounts:', error);
-      alert('Грешка при запазване на настройките');
+      toast({
+        title: 'Грешка',
+        description: 'Грешка при запазване на настройките',
+        status: 'error',
+        duration: 3000,
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const tabs = [
-    { id: 'accounting', label: 'Счетоводство', icon: '📚' },
-    { id: 'automation', label: 'Автоматизации', icon: '🤖' },
-    { id: 'users', label: 'Потребители и права', icon: '👥' },
+    { id: 'accounting', label: 'Счетоводство', icon: '=' },
+    { id: 'automation', label: 'Автоматизации', icon: '*' },
+    { id: 'users', label: 'Потребители и права', icon: '@' },
   ];
 
   const AccountSelect = ({
@@ -66,7 +96,7 @@ export default function Settings() {
     value,
     onChange,
     filterPrefix,
-    hint
+    hint,
   }: {
     label: string;
     value: number | undefined;
@@ -76,14 +106,12 @@ export default function Settings() {
   }) => {
     const filteredAccounts = filterPrefix ? filterAccountsByCode(filterPrefix) : accounts;
     return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label}
-        </label>
-        <select
-          value={value}
+      <Box>
+        <Text fontSize="sm" fontWeight="medium" mb={1}>{label}</Text>
+        <Select
+          value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          size="sm"
         >
           <option value="">-- Изберете сметка --</option>
           {filteredAccounts.map((acc: Account) => (
@@ -91,214 +119,221 @@ export default function Settings() {
               {acc.code} - {acc.name}
             </option>
           ))}
-        </select>
-        {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-      </div>
+        </Select>
+        {hint && <Text mt={1} fontSize="xs" color="gray.500">{hint}</Text>}
+      </Box>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <VStack spacing={6} align="stretch">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Настройки</h1>
-        <p className="mt-1 text-sm text-gray-500">
+      <Box>
+        <Heading size="lg">Настройки</Heading>
+        <Text mt={1} fontSize="sm" color="gray.500">
           Конфигурация на системата и предпочитания
-        </p>
-      </div>
+        </Text>
+      </Box>
 
-      <div className="flex gap-6">
+      <Flex gap={6}>
         {/* Sidebar Tabs */}
-        <div className="w-48 flex-shrink-0">
-          <nav className="space-y-1">
-            {tabs.map(tab => (
-              <button
+        <Box w="200px" flexShrink={0}>
+          <VStack align="stretch" spacing={1}>
+            {tabs.map((tab) => (
+              <Button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
+                variant="ghost"
+                justifyContent="flex-start"
+                bg={activeTab === tab.id ? activeBg : 'transparent'}
+                color={activeTab === tab.id ? activeColor : 'gray.600'}
+                _hover={{ bg: activeTab === tab.id ? activeBg : hoverBg }}
+                fontWeight={activeTab === tab.id ? 'medium' : 'normal'}
+                size="sm"
+                leftIcon={<Text>{tab.icon}</Text>}
               >
-                <span className="mr-3">{tab.icon}</span>
                 {tab.label}
-              </button>
+              </Button>
             ))}
-          </nav>
-        </div>
+          </VStack>
+        </Box>
 
         {/* Content */}
-        <div className="flex-1">
+        <Box flex="1">
           {activeTab === 'accounting' && (
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6 space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Счетоводни настройки</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Основни настройки за счетоводството
-                </p>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-md">
-                  <span className="text-2xl mr-3">💱</span>
-                  <div>
-                    <p className="text-sm font-medium text-green-900">Базова валута: {baseCurrency?.code || 'EUR'}</p>
-                    <p className="text-xs text-green-700">Фиксирана базова валута</p>
-                  </div>
-                </div>
+            <Box bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} p={6}>
+              <VStack align="stretch" spacing={6}>
+                <Box>
+                  <Heading size="md">Счетоводни настройки</Heading>
+                  <Text mt={1} fontSize="sm" color="gray.500">
+                    Основни настройки за счетоводството
+                  </Text>
+                </Box>
 
-                <div>
-                  <Link to="/settings/currencies" className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
-                    <span className="text-2xl mr-3">🪙</span>
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">Валути и курсове</p>
-                      <p className="text-xs text-blue-700">Управление на валути и обменни курсове</p>
-                    </div>
+                <VStack align="stretch" spacing={4}>
+                  <Flex align="center" p={3} bg="green.50" border="1px" borderColor="green.200" borderRadius="md">
+                    <Text fontSize="2xl" mr={3}>$</Text>
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" color="green.900">
+                        Базова валута: {baseCurrency?.code || 'EUR'}
+                      </Text>
+                      <Text fontSize="xs" color="green.700">Фиксирана базова валута</Text>
+                    </Box>
+                  </Flex>
+
+                  <Link as={RouterLink} to="/settings/currencies" _hover={{ textDecoration: 'none' }}>
+                    <Flex align="center" p={3} bg="blue.50" border="1px" borderColor="blue.200" borderRadius="md" _hover={{ bg: 'blue.100' }}>
+                      <Text fontSize="2xl" mr={3}>%</Text>
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" color="blue.900">Валути и курсове</Text>
+                        <Text fontSize="xs" color="blue.700">Управление на валути и обменни курсове</Text>
+                      </Box>
+                    </Flex>
                   </Link>
-                </div>
-                <div>
-                  <Link to="/settings/vat-rates" className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
-                    <span className="text-2xl mr-3">💰</span>
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">ДДС Ставки</p>
-                      <p className="text-xs text-blue-700">Управление на ставките по ЗДДС</p>
-                    </div>
+
+                  <Link as={RouterLink} to="/settings/vat-rates" _hover={{ textDecoration: 'none' }}>
+                    <Flex align="center" p={3} bg="blue.50" border="1px" borderColor="blue.200" borderRadius="md" _hover={{ bg: 'blue.100' }}>
+                      <Text fontSize="2xl" mr={3}>&</Text>
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" color="blue.900">ДДС Ставки</Text>
+                        <Text fontSize="xs" color="blue.700">Управление на ставките по ЗДДС</Text>
+                      </Box>
+                    </Flex>
                   </Link>
-                </div>
-              </div>
-            </div>
+                </VStack>
+              </VStack>
+            </Box>
           )}
 
           {activeTab === 'automation' && (
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6 space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Автоматизации</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Настройте default сметки за автоматични плащания и AI обработка на фактури
-                </p>
-              </div>
+            <Box bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} p={6}>
+              <VStack align="stretch" spacing={6}>
+                <Box>
+                  <Heading size="md">Автоматизации</Heading>
+                  <Text mt={1} fontSize="sm" color="gray.500">
+                    Настройте default сметки за автоматични плащания и AI обработка на фактури
+                  </Text>
+                </Box>
 
-              {!companyId ? (
-                <div className="text-center py-8 text-gray-500">
-                  Моля, изберете компания от менюто горе.
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Разплащания */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">
-                      Сметки за разплащания
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <AccountSelect
-                        label="Каса (плащания в брой)"
-                        value={defaultAccounts.defaultCashAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultCashAccountId: parseInt(v) }))}
-                        filterPrefix="50"
-                        hint="Обикновено 501"
-                      />
-                      <AccountSelect
-                        label="Плащания с карта (покупки)"
-                        value={defaultAccounts.defaultCardPaymentPurchaseAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultCardPaymentPurchaseAccountId: parseInt(v) }))}
-                        filterPrefix="50"
-                        hint="POS терминал за плащане"
-                      />
-                      <AccountSelect
-                        label="Плащания с карта (продажби)"
-                        value={defaultAccounts.defaultCardPaymentSalesAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultCardPaymentSalesAccountId: parseInt(v) }))}
-                        filterPrefix="50"
-                        hint="POS терминал за приемане"
-                      />
-                    </div>
-                  </div>
+                {!companyId ? (
+                  <Box textAlign="center" py={8} color="gray.500">
+                    Моля, изберете компания от менюто горе.
+                  </Box>
+                ) : (
+                  <VStack align="stretch" spacing={6}>
+                    {/* Разплащания */}
+                    <Box>
+                      <Heading size="sm" mb={4} pb={2} borderBottom="1px" borderColor={borderColor}>
+                        Сметки за разплащания
+                      </Heading>
+                      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                        <AccountSelect
+                          label="Каса (плащания в брой)"
+                          value={defaultAccounts.defaultCashAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultCashAccountId: parseInt(v) }))}
+                          filterPrefix="50"
+                          hint="Обикновено 501"
+                        />
+                        <AccountSelect
+                          label="Плащания с карта (покупки)"
+                          value={defaultAccounts.defaultCardPaymentPurchaseAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultCardPaymentPurchaseAccountId: parseInt(v) }))}
+                          filterPrefix="50"
+                          hint="POS терминал за плащане"
+                        />
+                        <AccountSelect
+                          label="Плащания с карта (продажби)"
+                          value={defaultAccounts.defaultCardPaymentSalesAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultCardPaymentSalesAccountId: parseInt(v) }))}
+                          filterPrefix="50"
+                          hint="POS терминал за приемане"
+                        />
+                      </SimpleGrid>
+                    </Box>
 
-                  {/* Контрагенти */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">
-                      Сметки на контрагенти
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <AccountSelect
-                        label="Клиенти"
-                        value={defaultAccounts.defaultCustomersAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultCustomersAccountId: parseInt(v) }))}
-                        filterPrefix="41"
-                        hint="Обикновено 411"
-                      />
-                      <AccountSelect
-                        label="Доставчици"
-                        value={defaultAccounts.defaultSuppliersAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultSuppliersAccountId: parseInt(v) }))}
-                        filterPrefix="40"
-                        hint="Обикновено 401"
-                      />
-                    </div>
-                  </div>
+                    {/* Контрагенти */}
+                    <Box>
+                      <Heading size="sm" mb={4} pb={2} borderBottom="1px" borderColor={borderColor}>
+                        Сметки на контрагенти
+                      </Heading>
+                      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                        <AccountSelect
+                          label="Клиенти"
+                          value={defaultAccounts.defaultCustomersAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultCustomersAccountId: parseInt(v) }))}
+                          filterPrefix="41"
+                          hint="Обикновено 411"
+                        />
+                        <AccountSelect
+                          label="Доставчици"
+                          value={defaultAccounts.defaultSuppliersAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultSuppliersAccountId: parseInt(v) }))}
+                          filterPrefix="40"
+                          hint="Обикновено 401"
+                        />
+                      </SimpleGrid>
+                    </Box>
 
-                  {/* Приходи и ДДС */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">
-                      Приходи и ДДС
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <AccountSelect
-                        label="Приходи от продажби (default)"
-                        value={defaultAccounts.defaultSalesRevenueAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultSalesRevenueAccountId: parseInt(v) }))}
-                        filterPrefix="70"
-                        hint="Обикновено 702 или 703"
-                      />
-                      <AccountSelect
-                        label="ДДС на покупките"
-                        value={defaultAccounts.defaultVatPurchaseAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultVatPurchaseAccountId: parseInt(v) }))}
-                        filterPrefix="453"
-                        hint="Обикновено 4531"
-                      />
-                      <AccountSelect
-                        label="ДДС на продажбите"
-                        value={defaultAccounts.defaultVatSalesAccountId}
-                        onChange={(v) => setDefaultAccounts(prev => ({ ...prev, defaultVatSalesAccountId: parseInt(v) }))}
-                        filterPrefix="453"
-                        hint="Обикновено 4532"
-                      />
-                    </div>
-                  </div>
+                    {/* Приходи и ДДС */}
+                    <Box>
+                      <Heading size="sm" mb={4} pb={2} borderBottom="1px" borderColor={borderColor}>
+                        Приходи и ДДС
+                      </Heading>
+                      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                        <AccountSelect
+                          label="Приходи от продажби (default)"
+                          value={defaultAccounts.defaultSalesRevenueAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultSalesRevenueAccountId: parseInt(v) }))}
+                          filterPrefix="70"
+                          hint="Обикновено 702 или 703"
+                        />
+                        <AccountSelect
+                          label="ДДС на покупките"
+                          value={defaultAccounts.defaultVatPurchaseAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultVatPurchaseAccountId: parseInt(v) }))}
+                          filterPrefix="453"
+                          hint="Обикновено 4531"
+                        />
+                        <AccountSelect
+                          label="ДДС на продажбите"
+                          value={defaultAccounts.defaultVatSalesAccountId}
+                          onChange={(v) => setDefaultAccounts((prev) => ({ ...prev, defaultVatSalesAccountId: parseInt(v) }))}
+                          filterPrefix="453"
+                          hint="Обикновено 4532"
+                        />
+                      </SimpleGrid>
+                    </Box>
 
-                  <div className="flex justify-end pt-4 border-t">
-                    <button
-                      onClick={handleSaveDefaultAccounts}
-                      disabled={saving}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {saving ? 'Запазване...' : 'Запази настройките'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+                    <Flex justify="flex-end" pt={4} borderTop="1px" borderColor={borderColor}>
+                      <Button
+                        colorScheme="blue"
+                        onClick={handleSaveDefaultAccounts}
+                        isLoading={saving}
+                      >
+                        Запази настройките
+                      </Button>
+                    </Flex>
+                  </VStack>
+                )}
+              </VStack>
+            </Box>
           )}
 
           {activeTab === 'users' && (
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900">Потребители и права</h2>
-                <p className="mt-1 text-sm text-gray-600">
+            <Box bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} p={6}>
+              <Heading size="md">Потребители и права</Heading>
+              <Text mt={1} fontSize="sm" color="gray.600">
                 Управление на потребителски роли и техните достъпи до различните модули на системата.
-                </p>
-                <div className="mt-4">
-                <Link
-                    to="/settings/users"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-                >
-                    Управление на потребители
-                </Link>
-                </div>
-            </div>
+              </Text>
+              <Box mt={4}>
+                <Button as={RouterLink} to="/settings/users" colorScheme="blue">
+                  Управление на потребители
+                </Button>
+              </Box>
+            </Box>
           )}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Flex>
+    </VStack>
   );
 }

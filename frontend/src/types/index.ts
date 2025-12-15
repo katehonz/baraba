@@ -200,11 +200,15 @@ export interface Currency {
 
 export interface ExchangeRate {
   id: number;
-  fromCurrency: { code: string };
-  toCurrency: { code: string };
+  from_currency_id: number;
+  to_currency_id: number;
+  fromCurrency?: { code: string };
+  toCurrency?: { code: string };
   rate: number;
-  validDate: string;
-  rateSource: string;
+  valid_date: string;
+  validDate?: string;
+  rate_source: string;
+  rateSource?: string;
 }
 
 export interface VatRate {

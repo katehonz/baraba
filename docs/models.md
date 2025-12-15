@@ -7,9 +7,9 @@
 ## Entity Relationship Diagram
 
 ```
-┌─────────────┐     ┌─────────────┐
-│  UserGroup  │────<│    User     │
-└─────────────┘     └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  UserGroup  │────<│    User     │────<│  AuditLog   │
+└─────────────┘     └─────────────┘     └─────────────┘
                            │
                            │ created_by_id
                            ▼
@@ -26,8 +26,14 @@
                            │                       │
                            └───────────┬───────────┘
                                        ▼
+                              ┌─────────────────┐     ┌─────────────┐
+                              │  JournalEntry   │────<│   VatRate   │
+                              └─────────────────┘     └─────────────┘
+                                       │
+                                       │
+                                       ▼
                               ┌─────────────────┐
-                              │  JournalEntry   │
+                              │FixedAssetCat.  │
                               └─────────────────┘
 ```
 
@@ -294,5 +300,47 @@
 | from_currency_id | int64 | FK към Currency (от) |
 | to_currency_id | int64 | FK към Currency (към) |
 | created_by_id | int64? | FK към User |
+| created_at | DateTime | Дата на създаване |
+| updated_at | DateTime | Дата на обновяване |
+
+---
+
+## AuditLog
+
+Одитни логове за проследяване на действия в системата.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | int64 | Primary key |
+| company_id | int64 | FK към Company |
+| user_id | int64 | FK към User |
+| username | string | Потребителско име |
+| user_role | string | Роля на потребител |
+| action | string | Действие: CREATE, UPDATE, DELETE, LOGIN, etc. |
+| entity_type | string | Тип на ентититета: Company, Account, etc. |
+| entity_id | string | ID на ентитета |
+| details | string | Детайли за действието |
+| ip_address | string | IP адрес |
+| user_agent | string | Browser user agent |
+| success | bool | Успешно ли е действието |
+| error_message | string | Съобщение за грешка |
+| created_at | DateTime | Дата на създаване |
+
+---
+
+## FixedAssetCategory
+
+Категории дълготрайни материални активи.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | int64 | Primary key |
+| code | string | Код на категория |
+| name | string | Наименование |
+| description | string | Описание |
+| depreciation_rate | float | Ставка на амортизация |
+| useful_life_years | int | Полезен живот в години |
+| is_active | bool | Активна ли е |
+| company_id | int64 | FK към Company |
 | created_at | DateTime | Дата на създаване |
 | updated_at | DateTime | Дата на обновяване |

@@ -87,9 +87,11 @@ cd baraba
 nimble install
 
 # Това инсталира:
-# - jester >= 0.6.0
-# - norm >= 2.8.0
-# - jwt >= 0.2
+# - jester >= 0.6.0          # Web framework
+# - norm >= 2.8.0           # PostgreSQL ORM
+# - jwt >= 0.2              # JWT authentication
+# - nim-graphql             # GraphQL support (vendor)
+# - tinypool                # Connection pool (vendor)
 ```
 
 ### 3. Frontend dependencies
@@ -145,7 +147,23 @@ npm run dev
 
 # Production build
 npm run build
+
+# Lint
+npm run lint
+
+# Preview production build
+npm run preview
 ```
+
+**Frontend зависимости:**
+- React 19.2.0
+- TypeScript
+- Vite (build tool)
+- Chakra UI (component library)
+- React Router (routing)
+- React Query (server state)
+- React Hook Form (forms)
+- Axios (HTTP client)
 
 ## Миграция на базата данни
 
@@ -210,6 +228,9 @@ curl -X POST http://localhost:5000/api/auth/register \
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"test123"}'
+
+# GraphQL Playground
+curl http://localhost:5000/graphql
 ```
 
 ## Проблеми и решения
@@ -261,3 +282,22 @@ sudo nano /etc/postgresql/15/main/pg_hba.conf
 **Проблем:** CORS blocked в браузъра
 
 **Решение:** Backend-ът автоматично добавя CORS headers. Увери се, че сървърът работи на порт 5000.
+
+### GraphQL грешки
+
+**Проблем:** GraphQL заявки не работят
+
+**Решение:** Провери дали GraphQL е зареден правилно в main router:
+```nim
+# В baraba.nim трябва да има:
+import graphql/resolvers
+# И router-ът трябва да включва GraphQL routes
+```
+
+### Vendor пакети
+
+Приложението използва vendor-нати пакети:
+- `nim-graphql` в `src/vendor/nim-graphql/`
+- `tinypool` в `src/vendor/tinypool/`
+
+Тези пакети са включени в репозиторито и не изискват отделна инсталация.

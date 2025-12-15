@@ -2,20 +2,22 @@
 
 ## Общ преглед
 
-Baraba е full-stack приложение с разделен backend и frontend:
+Baraba е full-stack счетоводно приложение с разделен backend и frontend:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      Frontend                           │
-│                   (React + Vite)                        │
-│                   Port: 5173                            │
+│            (React + TypeScript + Vite)                 │
+│                 Port: 5173                             │
+│         Chakra UI + React Query + Router              │
 └─────────────────────────┬───────────────────────────────┘
-                          │ HTTP/JSON
+                          │ HTTP/JSON + GraphQL
                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      Backend                            │
-│                  (Nim + Jester)                         │
-│                   Port: 5000                            │
+│            (Nim + Jester + GraphQL)                   │
+│                 Port: 5000                             │
+│           REST API + GraphQL Endpoints                │
 └─────────────────────────┬───────────────────────────────┘
                           │ SQL
                           ▼
@@ -31,7 +33,9 @@ Baraba е full-stack приложение с разделен backend и fronten
 
 ```
 ┌─────────────────────────────────────────┐
-│              Routes (baraba.nim)         │  ← HTTP endpoints
+│              Routes (routes/*.nim)       │  ← HTTP endpoints
+├─────────────────────────────────────────┤
+│           GraphQL (graphql/*.nim)        │  ← GraphQL schema/resolvers
 ├─────────────────────────────────────────┤
 │           Services (auth.nim)            │  ← Business logic
 ├─────────────────────────────────────────┤
@@ -45,12 +49,30 @@ Baraba е full-stack приложение с разделен backend и fronten
 
 ```
 src/
-├── baraba.nim              # Entry point + Routes
-│   └── router mainRouter   # Jester router с всички endpoints
+├── baraba.nim              # Entry point + Main router
+│
+├── routes/                 # REST API routes
+│   ├── auth_routes.nim     # Authentication endpoints
+│   ├── company_routes.nim  # Company CRUD
+│   ├── account_routes.nim  # Account management
+│   ├── counterpart_routes.nim # Counterpart CRUD
+│   ├── journal_routes.nim  # Journal entries
+│   ├── currency_routes.nim # Currencies
+│   ├── vat_rate_routes.nim # VAT rates
+│   ├── exchange_rate_routes.nim # Exchange rates
+│   ├── user_routes.nim     # User management
+│   ├── user_group_routes.nim # User groups
+│   ├── audit_log_routes.nim # Audit logs
+│   ├── fixed_asset_category_routes.nim # Fixed assets
+│   └── vies_routes.nim     # VIES VAT validation
+│
+├── graphql/                # GraphQL layer
+│   ├── schema.graphql      # GraphQL schema definition
+│   └── resolvers.nim       # GraphQL resolvers
 │
 ├── db/
 │   ├── config.nim          # Database connection settings
-│   │   └── openDb()        # Отваря връзка към PostgreSQL
+│   │   └── getDbConn()     # Connection pool management
 │   └── migrate.nim         # Schema migrations + Seed data
 │       ├── runMigrations() # Създава таблици
 │       └── seedInitialData() # Начални данни
@@ -64,10 +86,12 @@ src/
 │   ├── currency.nim       # Currency
 │   ├── vatrate.nim        # VatRate
 │   ├── exchangerate.nim   # ExchangeRate
+│   ├── fixed_asset_category.nim # Fixed asset categories
+│   ├── audit_log.nim      # Audit logging
 │   └── enums.nim          # Shared enums
 │
 ├── services/
-│   └── auth.nim           # Authentication
+│   └── auth.nim           # Authentication service
 │       ├── hashPassword()
 │       ├── verifyPassword()
 │       ├── generateToken()
@@ -137,6 +161,8 @@ frontend/src/
 ├── main.tsx               # Entry point
 ├── App.tsx                # Root component + Routes
 ├── App.css                # Global styles
+├── index.css              # Base styles
+├── theme.ts               # Chakra UI theme
 │
 ├── api/                   # API клиенти
 │   ├── client.ts          # Axios instance + interceptors
@@ -144,7 +170,18 @@ frontend/src/
 │   ├── companies.ts       # Companies API
 │   ├── accounts.ts        # Accounts API
 │   ├── counterparts.ts    # Counterparts API
-│   └── journal.ts         # Journal API
+│   ├── journal.ts         # Journal API
+│   ├── currencies.ts      # Currencies API
+│   ├── vatRates.ts        # VAT rates API
+│   ├── exchangeRates.ts   # Exchange rates API
+│   ├── users.ts           # Users API
+│   ├── userGroups.ts      # User groups API
+│   ├── auditLogs.ts       # Audit logs API
+│   ├── fixedAssetCategories.ts # Fixed assets API
+│   ├── vies.ts            # VIES validation API
+│   ├── reports.ts         # Reports API
+│   ├── monthlyStats.ts    # Monthly statistics API
+│   └── settings.ts        # Settings API
 │
 ├── contexts/              # React Context
 │   ├── AuthContext.tsx    # User + Token state
@@ -157,18 +194,35 @@ frontend/src/
 │   ├── HomePage.tsx
 │   ├── auth/
 │   │   ├── LoginPage.tsx
-│   │   └── RegisterPage.tsx
+│   │   ├── RegisterPage.tsx
+│   │   ├── RecoverPasswordPage.tsx
+│   │   └── ResetPasswordPage.tsx
 │   ├── companies/
 │   │   └── CompaniesPage.tsx
 │   ├── accounts/
 │   │   └── AccountsPage.tsx
 │   ├── counterparts/
 │   │   └── CounterpartsPage.tsx
-│   └── journal/
-│       └── JournalPage.tsx
+│   ├── journal/
+│   │   ├── JournalDashboardPage.tsx
+│   │   ├── JournalEntriesPage.tsx
+│   │   └── JournalEntryFormPage.tsx
+│   ├── reports/
+│   │   ├── ReportsPage.tsx
+│   │   ├── AuditLogsPage.tsx
+│   │   ├── CounterpartyReportsPage.tsx
+│   │   └── MonthlyStatsPage.tsx
+│   └── settings/
+│       ├── SettingsPage.tsx
+│       ├── UsersPage.tsx
+│       ├── CurrenciesPage.tsx
+│       └── VatRatesPage.tsx
 │
-└── types/
-    └── index.ts           # TypeScript interfaces
+├── types/
+│   └── index.ts           # TypeScript interfaces
+│
+└── assets/
+    └── react.svg
 ```
 
 ### State Management
@@ -177,13 +231,13 @@ frontend/src/
 ┌──────────────────────────────────────────────────────┐
 │                    App Component                      │
 │  ┌─────────────────────────────────────────────────┐ │
-│  │              QueryClientProvider                 │ │
+│  │              QueryClientProvider                 │ │  # React Query
 │  │  ┌────────────────────────────────────────────┐ │ │
-│  │  │              AuthProvider                   │ │ │
+│  │  │              AuthProvider                   │ │ │  # AuthContext
 │  │  │  ┌──────────────────────────────────────┐  │ │ │
-│  │  │  │          CompanyProvider              │  │ │ │
+│  │  │  │          CompanyProvider              │  │ │ │  # CompanyContext
 │  │  │  │  ┌────────────────────────────────┐  │  │ │ │
-│  │  │  │  │          AppRoutes              │  │  │ │ │
+│  │  │  │  │          AppRoutes              │  │  │ │ │  # React Router
 │  │  │  │  └────────────────────────────────┘  │  │ │ │
 │  │  │  └──────────────────────────────────────┘  │ │ │
 │  │  └────────────────────────────────────────────┘ │ │
@@ -191,16 +245,34 @@ frontend/src/
 └──────────────────────────────────────────────────────┘
 ```
 
+**Технологии:**
+- **React Query** - Server state management, caching, mutations
+- **React Context** - Client state (auth, current company)
+- **React Hook Form** - Form state management
+- **Chakra UI** - Component library with built-in state management
+
 ### Routing
 
 ```
-/                 → HomePage (protected)
-├── companies     → CompaniesPage (protected)
-├── accounts      → AccountsPage (protected)
-├── counterparts  → CounterpartsPage (protected)
-├── journal       → JournalPage (protected)
-├── login         → LoginPage (public)
-└── register      → RegisterPage (public)
+/                           → HomePage (protected)
+├── companies               → CompaniesPage (protected)
+├── accounts                → AccountsPage (protected)
+├── counterparts            → CounterpartsPage (protected)
+├── journal                 → JournalDashboardPage (protected)
+│   ├── entries            → JournalEntriesPage (protected)
+│   └── new                → JournalEntryFormPage (protected)
+├── reports                 → ReportsPage (protected)
+│   ├── audit-logs         → AuditLogsPage (protected)
+│   ├── counterparties     → CounterpartyReportsPage (protected)
+│   └── monthly-stats      → MonthlyStatsPage (protected)
+├── settings                → SettingsPage (protected)
+│   ├── users              → UsersPage (protected)
+│   ├── currencies         → CurrenciesPage (protected)
+│   └── vat-rates          → VatRatesPage (protected)
+├── login                   → LoginPage (public)
+├── register                → RegisterPage (public)
+├── recover-password        → RecoverPasswordPage (public)
+└── reset-password          → ResetPasswordPage (public)
 ```
 
 ### API Client Pattern
@@ -219,6 +291,40 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Error handling
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Redirect to login
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+### React Query Integration
+
+```typescript
+// Example API usage with React Query
+export const useCompanies = () => {
+  return useQuery({
+    queryKey: ['companies'],
+    queryFn: () => companiesApi.getAll(),
+  });
+};
+
+export const useCreateCompany = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateCompanyInput) => companiesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+    },
+  });
+};
 ```
 
 ## Security
@@ -276,6 +382,24 @@ proc hashPassword*(password: string): string =
 }
 ```
 
+## GraphQL Integration
+
+Приложението поддържа както REST API, така и GraphQL:
+
+### GraphQL Schema
+
+- **Query:** Вече дефинирани заявки за всички основни ресурси
+- **Mutation:** CRUD операции за всички модели
+- **Reports:** Специализирани заявки за оборотна ведомост и главна книга
+- **Types:** Пълна дефиниция на всички типове данни
+
+### GraphQL Endpoints
+
+```
+POST /graphql           # GraphQL playground и queries
+GET  /graphql?query={...} # Simple GET queries
+```
+
 ## Deployment Considerations
 
 ### Production Changes
@@ -286,6 +410,7 @@ proc hashPassword*(password: string): string =
 4. **CORS** - Ограничи до конкретни домейни
 5. **HTTPS** - Използвай SSL/TLS
 6. **Threading** - Изследвай защо multi-threading причинява SIGSEGV
+7. **Connection Pooling** - Използвай connection pool за PostgreSQL
 
 ### Docker (бъдещо)
 

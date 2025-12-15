@@ -6,6 +6,12 @@
 http://localhost:5000
 ```
 
+## API видове
+
+Приложението поддържа два вида API:
+1. **REST API** - Традиционни HTTP endpoints
+2. **GraphQL API** - Гъвкав query/mutation език
+
 ## Автентикация
 
 API използва JWT (JSON Web Token) за автентикация. След успешен login/register, получавате token който трябва да изпращате в header:
@@ -110,6 +116,258 @@ Authorization: Bearer <token>
 
 **Errors:**
 - `401` - Невалидно потребителско име или парола
+
+---
+
+## Валути (Currencies)
+
+### GET /api/currencies
+
+Списък на всички валути.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "code": "BGN",
+    "name": "Bulgarian Lev",
+    "nameBg": "Български лев",
+    "symbol": "лв",
+    "decimalPlaces": 2,
+    "isActive": true,
+    "isBaseCurrency": true,
+    "bnbCode": "BGN",
+    "createdAt": "2025-12-15T15:00:00Z",
+    "updatedAt": "2025-12-15T15:00:00Z"
+  }
+]
+```
+
+---
+
+### POST /api/currencies
+
+Създаване на нова валута.
+
+**Request Body:**
+```json
+{
+  "code": "USD",
+  "name": "US Dollar",
+  "nameBg": "Щатски долар",
+  "symbol": "$",
+  "decimalPlaces": 2,
+  "isBaseCurrency": false
+}
+```
+
+---
+
+## Валутни курсове (Exchange Rates)
+
+### GET /api/exchange-rates
+
+Списък на валутни курсове.
+
+**Query Parameters:**
+- `fromCurrencyId` (optional) - ID на начална валута
+- `toCurrencyId` (optional) - ID на целева валута
+- `validDate` (optional) - Дата на валидност
+
+---
+
+### POST /api/exchange-rates
+
+Създаване на нов валутен курс.
+
+**Request Body:**
+```json
+{
+  "fromCurrencyId": 2,
+  "toCurrencyId": 1,
+  "rate": 1.956,
+  "reverseRate": 0.511,
+  "validDate": "2025-12-15",
+  "rateSource": "MANUAL",
+  "notes": "Курс за деня"
+}
+```
+
+---
+
+## ДДС ставки (VAT Rates)
+
+### GET /api/vat-rates
+
+Списък на ДДС ставки.
+
+**Query Parameters:**
+- `companyId` (optional) - ID на фирма
+
+---
+
+### POST /api/vat-rates
+
+Създаване на нова ДДС ставка.
+
+**Request Body:**
+```json
+{
+  "code": "VAT20",
+  "name": "ДДС 20%",
+  "rate": 20.0,
+  "vatDirection": "SALE",
+  "isActive": true,
+  "companyId": 1
+}
+```
+
+---
+
+## Потребители (Users)
+
+### GET /api/users
+
+Списък на потребители.
+
+**Query Parameters:**
+- `isActive` (optional) - Филтрирай по активност
+- `groupId` (optional) - Филтрирай по група
+
+---
+
+### POST /api/users
+
+Създаване на нов потребител.
+
+**Request Body:**
+```json
+{
+  "username": "newuser",
+  "email": "newuser@example.com",
+  "password": "password123",
+  "firstName": "Иван",
+  "lastName": "Петров",
+  "groupId": 2
+}
+```
+
+---
+
+## Потребителски групи (User Groups)
+
+### GET /api/user-groups
+
+Списък на потребителски групи.
+
+---
+
+## Одитни логове (Audit Logs)
+
+### GET /api/audit-logs
+
+Списък на одитни логове.
+
+**Query Parameters:**
+- `companyId` (optional) - ID на фирма
+- `fromDate` (optional) - Начална дата
+- `toDate` (optional) - Крайна дата
+- `search` (optional) - Търсене в username/details
+- `action` (optional) - Филтрирай по действие
+- `offset` (optional) - Offset за pagination
+- `limit` (optional) - Limit за pagination
+
+**Response (200):**
+```json
+{
+  "logs": [
+    {
+      "id": 1,
+      "companyId": 1,
+      "userId": 1,
+      "username": "admin",
+      "userRole": "Администратор",
+      "action": "CREATE_COMPANY",
+      "entityType": "Company",
+      "entityId": "1",
+      "details": "Created company 'Тест ЕООД'",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "Mozilla/5.0...",
+      "success": true,
+      "errorMessage": null,
+      "createdAt": "2025-12-15T15:00:00Z"
+    }
+  ],
+  "totalCount": 1,
+  "hasMore": false
+}
+```
+
+---
+
+### GET /api/audit-logs/stats
+
+Статистика на одитни логове.
+
+**Query Parameters:**
+- `companyId` - ID на фирма
+- `days` - Брой дни назад (default: 30)
+
+---
+
+## VIES валидация
+
+### GET /api/vies/validate/:vatNumber
+
+Валидация на ДДС номер през VIES.
+
+**Example:**
+```
+GET /api/vies/validate/BG123456789
+```
+
+**Response (200):**
+```json
+{
+  "valid": true,
+  "name": "TEST COMPANY LTD",
+  "longAddress": "123 Test Street, Sofia, Bulgaria",
+  "vatNumber": "BG123456789"
+}
+```
+
+---
+
+## Статистики (Reports)
+
+### GET /api/reports/monthly-stats
+
+Месечни статистики за фирма.
+
+**Query Parameters:**
+- `companyId` - ID на фирма
+- `fromYear` - Начална година
+- `fromMonth` - Начален месец
+- `toYear` - Крайна година
+- `toMonth` - Краен месец
+
+**Response (200):**
+```json
+[
+  {
+    "year": 2025,
+    "month": 12,
+    "monthName": "December",
+    "totalEntries": 45,
+    "postedEntries": 40,
+    "totalEntryLines": 89,
+    "postedEntryLines": 80,
+    "totalAmount": "125000.50",
+    "vatAmount": "25000.10"
+  }
+]
+```
 
 ---
 
@@ -352,6 +610,156 @@ GET /api/accounts?companyId=1
   "id": 2,
   "document_number": "INV-002",
   ...
+}
+```
+
+---
+
+---
+
+## GraphQL API
+
+### Endpoint
+
+```
+POST /graphql
+```
+
+### Playground
+
+GraphQL Playground е достъпен на:
+```
+http://localhost:5000/graphql
+```
+
+### Основни Query-та
+
+```graphql
+# Вземане на текущ потребител
+query {
+  me {
+    id
+    username
+    email
+  }
+}
+
+# Списък с фирми
+query {
+  companies {
+    id
+    name
+    eik
+    isActive
+  }
+}
+
+# Сметки за фирма
+query GetAccounts($companyId: Int!) {
+  accounts(companyId: $companyId) {
+    id
+    code
+    name
+    accountType
+  }
+}
+
+# Журнални записи
+query GetJournalEntries($companyId: Int!, $posted: Boolean) {
+  journalEntries(companyId: $companyId, posted: $posted) {
+    id
+    entryNumber
+    documentDate
+    description
+    totalAmount
+    isPosted
+    lines {
+      id
+      debitAmount
+      creditAmount
+      account {
+        code
+        name
+      }
+    }
+  }
+}
+```
+
+### Основни Mutations
+
+```graphql
+# Създаване на фирма
+mutation CreateCompany($input: CreateCompanyInput!) {
+  createCompany(input: $input) {
+    id
+    name
+    eik
+  }
+}
+
+# Създаване на счетоводен запис
+mutation CreateJournalEntry($input: CreateJournalEntryInput!) {
+  createJournalEntry(input: $input) {
+    id
+    entryNumber
+    documentDate
+    description
+  }
+}
+
+# Осчетоводяване на запис
+mutation PostJournalEntry($id: Int!) {
+  postJournalEntry(id: $id) {
+    id
+    isPosted
+    postedAt
+  }
+}
+```
+
+### Справки
+
+```graphql
+# Оборотна ведомост
+query TurnoverSheet($companyId: Int!, $fromDate: String!, $toDate: String!) {
+  turnoverSheet(companyId: $companyId, fromDate: $fromDate, toDate: $toDate) {
+    companyId
+    fromDate
+    toDate
+    accounts {
+      code
+      name
+      openingDebit
+      openingCredit
+      periodDebit
+      periodCredit
+      closingDebit
+      closingCredit
+    }
+  }
+}
+
+# Главна книга
+query GeneralLedger($companyId: Int!, $accountId: Int!, $fromDate: String!, $toDate: String!) {
+  generalLedger(companyId: $companyId, accountId: $accountId, fromDate: $fromDate, toDate: $toDate) {
+    account {
+      id
+      code
+      name
+    }
+    openingBalance
+    closingBalance
+    transactions {
+      date
+      entryNumber
+      documentNumber
+      description
+      debit
+      credit
+      balance
+    }
+  }
 }
 ```
 

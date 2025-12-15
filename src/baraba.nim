@@ -1,7 +1,7 @@
 ## Baraba - Счетоводна програма
 ## REST API built with Jester + Nim
 
-import std/[json, strutils, options, times, math]
+import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient]
 import jester
 import norm/postgres
 
@@ -527,7 +527,81 @@ router mainRouter:
       releaseDbConn(db)
 
   post "/api/exchange-rates/fetch-ecb":
-    resp Http200, jsonCors, """{"message": "ECB rates fetching not implemented yet"}"""
+    let db = getDbConn()
+    try:
+      # Fetch ECB rates XML
+      let client = newHttpClient()
+      let ecbUrl = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+      let xmlContent = client.getContent(ecbUrl)
+      client.close()
+
+      # Parse XML
+      let xml = parseXml(xmlContent)
+
+      # Find EUR currency (base)
+      var eurCurrency = newCurrency()
+      var eurCurrencies = @[newCurrency()]
+      db.select(eurCurrencies, "code = $1", "EUR")
+      if eurCurrencies.len > 0 and eurCurrencies[0].id != 0:
+        eurCurrency = eurCurrencies[0]
+      else:
+        # Create EUR if not exists
+        eurCurrency = newCurrency(code = "EUR", name = "Euro", symbol = "€", isBaseCurrency = true, isActive = true)
+        db.insert(eurCurrency)
+
+      var ratesAdded = 0
+      var ratesDate = ""
+
+      # Navigate to Cube elements
+      for envelope in xml:
+        if envelope.tag == "Cube":
+          for dateCube in envelope:
+            if dateCube.tag == "Cube" and dateCube.attr("time") != "":
+              ratesDate = dateCube.attr("time")
+              let validDate = parse(ratesDate, "yyyy-MM-dd")
+
+              for rateCube in dateCube:
+                if rateCube.tag == "Cube":
+                  let currCode = rateCube.attr("currency")
+                  let rateStr = rateCube.attr("rate")
+                  if currCode != "" and rateStr != "":
+                    let rate = parseFloat(rateStr)
+
+                    # Find or create currency
+                    var curr = newCurrency()
+                    var currs = @[newCurrency()]
+                    db.select(currs, "code = $1", currCode)
+                    if currs.len > 0 and currs[0].id != 0:
+                      curr = currs[0]
+                    else:
+                      curr = newCurrency(code = currCode, name = currCode, isActive = false)
+                      db.insert(curr)
+
+                    # Create new rate (allow duplicates, user can manage them)
+                    var newRate = newExchangeRate(
+                      rate = rate,
+                      reverse_rate = 1.0 / rate,
+                      valid_date = validDate,
+                      rate_source = "ECB",
+                      from_currency_id = eurCurrency.id,
+                      to_currency_id = curr.id
+                    )
+                    db.insert(newRate)
+                    ratesAdded += 1
+
+      resp Http200, jsonCors, $(%*{
+        "success": true,
+        "message": "ECB курсовете са обновени",
+        "ratesAdded": ratesAdded,
+        "date": ratesDate
+      })
+    except CatchableError as e:
+      resp Http500, jsonCors, $(%*{
+        "error": "Грешка при извличане на курсове от ЕЦБ",
+        "details": e.msg
+      })
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # VAT RATE ROUTES

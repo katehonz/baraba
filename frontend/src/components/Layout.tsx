@@ -79,16 +79,13 @@ export default function Layout() {
 
           {/* Navigation */}
           <VStack align="stretch" flex="1" py={4} spacing={0}>
+            <NavLink to="/">Начало</NavLink>
             <NavLink to="/companies">Фирми</NavLink>
-            {currentCompany && (
-              <>
-                <NavLink to="/accounts">Сметки</NavLink>
-                <NavLink to="/counterparts">Контрагенти</NavLink>
-                <NavLink to="/journal">Дневник</NavLink>
-                <NavLink to="/reports">Отчети</NavLink>
-                <NavLink to="/settings">Настройки</NavLink>
-              </>
-            )}
+            <NavLink to="/accounts">Сметки</NavLink>
+            <NavLink to="/counterparts">Контрагенти</NavLink>
+            <NavLink to="/journal">Дневник</NavLink>
+            <NavLink to="/reports">Отчети</NavLink>
+            <NavLink to="/settings">Настройки</NavLink>
           </VStack>
 
           {/* Footer */}

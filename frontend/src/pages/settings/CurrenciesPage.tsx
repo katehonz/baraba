@@ -1,4 +1,37 @@
 import { useState, useEffect } from 'react';
+import {
+  Box,
+  Heading,
+  Text,
+  SimpleGrid,
+  Flex,
+  Button,
+  VStack,
+  HStack,
+  Spinner,
+  useColorModeValue,
+  Badge,
+  Input,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
+} from '@chakra-ui/react';
 import { currenciesApi } from '../../api/currencies';
 import { exchangeRatesApi } from '../../api/exchangeRates';
 import type { Currency, ExchangeRate } from '../../types';
@@ -6,13 +39,17 @@ import type { Currency, ExchangeRate } from '../../types';
 export default function Currencies() {
   const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null);
   const [fetchingRates, setFetchingRates] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'available'>('active');
-  const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingRates, _setLoadingRates] = useState(false);
+  const [loadingRates] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const tableHeaderBg = useColorModeValue('gray.50', 'gray.700');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
   const fetchData = async () => {
     setLoading(true);
@@ -37,8 +74,7 @@ export default function Currencies() {
   const activeCurrencies = currencies.filter(c => c.isActive);
   const inactiveCurrencies = currencies.filter(c => !c.isActive);
 
-  // This should be handled by the backend
-  const availableCurrencies: any[] = []; 
+  const availableCurrencies: any[] = [];
   const filteredAvailable = availableCurrencies;
 
   const handleFetchRates = async () => {
@@ -66,7 +102,7 @@ export default function Currencies() {
     try {
       await currenciesApi.create({ code: currency.code, name: currency.name, isActive: true });
       fetchData();
-      setShowAddModal(false);
+      onClose();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Грешка при добавяне на валута');
     }
@@ -80,334 +116,323 @@ export default function Currencies() {
     });
   };
 
+  // Create currency lookup map
+  const currencyMap = currencies.reduce((acc, c) => {
+    acc[c.id] = c.code;
+    return acc;
+  }, {} as Record<number, string>);
+
+  const getCurrencyCode = (id: number) => currencyMap[id] || `ID:${id}`;
+
   const filteredRates = selectedCurrency
-    ? rates.filter(r => r.fromCurrency.code === selectedCurrency || r.toCurrency.code === selectedCurrency)
+    ? rates.filter(r => {
+        const fromCode = getCurrencyCode(r.from_currency_id);
+        const toCode = getCurrencyCode(r.to_currency_id);
+        return fromCode === selectedCurrency || toCode === selectedCurrency;
+      })
     : rates;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-      </div>
+      <Flex align="center" justify="center" h="64">
+        <Spinner size="lg" color="blue.500" />
+      </Flex>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <VStack spacing={6} align="stretch">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Валути и курсове</h1>
-          <p className="mt-1 text-sm text-gray-500">
+      <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
+        <Box>
+          <Heading size="lg">Валути и курсове</Heading>
+          <Text mt={1} fontSize="sm" color="gray.500">
             Управление на валути и обменни курсове от ЕЦБ
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
+          </Text>
+        </Box>
+        <HStack spacing={2}>
+          <Button variant="outline" onClick={onOpen}>
             + Добави валута
-          </button>
-          <button
+          </Button>
+          <Button
+            colorScheme="blue"
             onClick={handleFetchRates}
-            disabled={fetchingRates}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+            isLoading={fetchingRates}
           >
-            {fetchingRates ? 'Зареждане...' : 'Обнови от ЕЦБ'}
-          </button>
-        </div>
-      </div>
+            Обнови от ЕЦБ
+          </Button>
+        </HStack>
+      </Flex>
 
       {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <span className="text-2xl mr-3">💶</span>
-          <div>
-            <h3 className="text-sm font-medium text-blue-900">Базова валута: EUR</h3>
-            <p className="mt-1 text-sm text-blue-700">
-              Курсовете се извличат от Европейската централна банка (ЕЦБ) за активните валути.
-            </p>
-          </div>
-        </div>
-      </div>
+      <Flex
+        align="flex-start"
+        p={4}
+        bg="blue.50"
+        border="1px"
+        borderColor="blue.200"
+        borderRadius="lg"
+      >
+        <Text fontSize="2xl" mr={3}>$</Text>
+        <Box>
+          <Text fontSize="sm" fontWeight="medium" color="blue.900">Базова валута: EUR</Text>
+          <Text mt={1} fontSize="sm" color="blue.700">
+            Курсовете се извличат от Европейската централна банка (ЕЦБ) за активните валути.
+          </Text>
+        </Box>
+      </Flex>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <SimpleGrid columns={{ base: 1, xl: 3 }} spacing={6}>
         {/* Currencies List */}
-        <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
-              <button
-                onClick={() => setActiveTab('active')}
-                className={`flex-1 py-3 px-4 text-center text-sm font-medium border-b-2 ${
-                  activeTab === 'active'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Активни ({activeCurrencies.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('available')}
-                className={`flex-1 py-3 px-4 text-center text-sm font-medium border-b-2 ${
-                  activeTab === 'available'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Неактивни ({inactiveCurrencies.length})
-              </button>
-            </nav>
-          </div>
+        <Box bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} overflow="hidden">
+          <Tabs>
+            <TabList>
+              <Tab flex={1}>Активни ({activeCurrencies.length})</Tab>
+              <Tab flex={1}>Неактивни ({inactiveCurrencies.length})</Tab>
+            </TabList>
 
-          <div className="p-4 space-y-2 max-h-[500px] overflow-y-auto">
-            {activeTab === 'active' ? (
-              activeCurrencies.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">Няма активни валути</p>
-              ) : (
-                activeCurrencies.map(currency => (
-                  <div
-                    key={currency.id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                      selectedCurrency === currency.code
-                        ? 'border-blue-300 bg-blue-50'
-                        : currency.isBaseCurrency
-                        ? 'border-green-200 bg-green-50'
-                        : 'border-gray-100 hover:bg-gray-50'
-                    }`}
-                    onClick={() => setSelectedCurrency(
-                      selectedCurrency === currency.code ? null : currency.code
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className="text-lg font-bold text-gray-700 w-10">
-                          {currency.symbol || currency.code}
-                        </span>
-                        <div className="ml-2">
-                          <div className="text-sm font-medium text-gray-900">{currency.code}</div>
-                          <div className="text-xs text-gray-500">{currency.name}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {currency.isBaseCurrency && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-                            Базова
-                          </span>
-                        )}
-                        {!currency.isBaseCurrency && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleActive(currency);
-                            }}
-                            className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-                          >
-                            Деактивирай
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )
-            ) : (
-              inactiveCurrencies.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">Няма неактивни валути</p>
-              ) : (
-                inactiveCurrencies.map(currency => (
-                  <div
-                    key={currency.id}
-                    className="p-3 rounded-lg border border-gray-200 bg-gray-50"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className="text-lg font-bold text-gray-400 w-10">
-                          {currency.symbol || currency.code}
-                        </span>
-                        <div className="ml-2">
-                          <div className="text-sm font-medium text-gray-600">{currency.code}</div>
-                          <div className="text-xs text-gray-400">{currency.name}</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleToggleActive(currency)}
-                        className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-600 hover:bg-green-200"
-                      >
-                        Активирай
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Exchange Rates */}
-        <div className="xl:col-span-2 bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Обменни курсове
-                {selectedCurrency && (
-                  <span className="ml-2 text-sm font-normal text-gray-500">
-                    (филтрирано по {selectedCurrency})
-                  </span>
-                )}
-              </h3>
-              {selectedCurrency && (
-                <button
-                  onClick={() => setSelectedCurrency(null)}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  Покажи всички
-                </button>
-              )}
-            </div>
-          </div>
-
-          {loadingRates ? (
-            <div className="flex items-center justify-center h-48">
-              <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto max-h-[400px]">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">От</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Към</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Курс</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Източник</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredRates.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                        Няма обменни курсове. Натиснете "Обнови от ЕЦБ".
-                      </td>
-                    </tr>
+            <TabPanels>
+              <TabPanel p={4} maxH="500px" overflowY="auto">
+                <VStack spacing={2} align="stretch">
+                  {activeCurrencies.length === 0 ? (
+                    <Text textAlign="center" color="gray.500" py={4}>Няма активни валути</Text>
                   ) : (
-                    filteredRates.map((rate) => (
-                      <tr key={rate.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="px-2 py-1 text-sm font-medium bg-gray-100 rounded">
-                            {rate.fromCurrency.code}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="px-2 py-1 text-sm font-medium bg-gray-100 rounded">
-                            {rate.toCurrency.code}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-right">
-                          <span className="text-sm font-mono font-medium text-gray-900">
-                            {rate.rate.toFixed(4)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="text-sm text-gray-500">{formatDate(rate.validDate)}</span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            rate.rateSource === 'ECB'
-                              ? 'bg-green-100 text-green-700'
-                              : rate.rateSource === 'FIXED'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {rate.rateSource}
-                          </span>
-                        </td>
-                      </tr>
+                    activeCurrencies.map(currency => (
+                      <Box
+                        key={currency.id}
+                        p={3}
+                        borderRadius="lg"
+                        border="1px"
+                        borderColor={selectedCurrency === currency.code ? 'blue.300' : currency.isBaseCurrency ? 'green.200' : borderColor}
+                        bg={selectedCurrency === currency.code ? 'blue.50' : currency.isBaseCurrency ? 'green.50' : 'transparent'}
+                        cursor="pointer"
+                        transition="all 0.2s"
+                        _hover={{ bg: selectedCurrency === currency.code ? 'blue.50' : 'gray.50' }}
+                        onClick={() => setSelectedCurrency(selectedCurrency === currency.code ? null : currency.code)}
+                      >
+                        <Flex justify="space-between" align="center">
+                          <HStack>
+                            <Text fontSize="lg" fontWeight="bold" color="gray.700" w={10}>
+                              {currency.symbol || currency.code}
+                            </Text>
+                            <Box ml={2}>
+                              <Text fontSize="sm" fontWeight="medium">{currency.code}</Text>
+                              <Text fontSize="xs" color="gray.500">{currency.name}</Text>
+                            </Box>
+                          </HStack>
+                          <HStack spacing={2}>
+                            {currency.isBaseCurrency && (
+                              <Badge colorScheme="green">Базова</Badge>
+                            )}
+                            {!currency.isBaseCurrency && (
+                              <Button
+                                size="xs"
+                                colorScheme="red"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleActive(currency);
+                                }}
+                              >
+                                Деактивирай
+                              </Button>
+                            )}
+                          </HStack>
+                        </Flex>
+                      </Box>
                     ))
                   )}
-                </tbody>
-              </table>
-            </div>
+                </VStack>
+              </TabPanel>
+
+              <TabPanel p={4} maxH="500px" overflowY="auto">
+                <VStack spacing={2} align="stretch">
+                  {inactiveCurrencies.length === 0 ? (
+                    <Text textAlign="center" color="gray.500" py={4}>Няма неактивни валути</Text>
+                  ) : (
+                    inactiveCurrencies.map(currency => (
+                      <Box
+                        key={currency.id}
+                        p={3}
+                        borderRadius="lg"
+                        border="1px"
+                        borderColor={borderColor}
+                        bg="gray.50"
+                      >
+                        <Flex justify="space-between" align="center">
+                          <HStack>
+                            <Text fontSize="lg" fontWeight="bold" color="gray.400" w={10}>
+                              {currency.symbol || currency.code}
+                            </Text>
+                            <Box ml={2}>
+                              <Text fontSize="sm" fontWeight="medium" color="gray.600">{currency.code}</Text>
+                              <Text fontSize="xs" color="gray.400">{currency.name}</Text>
+                            </Box>
+                          </HStack>
+                          <Button
+                            size="xs"
+                            colorScheme="green"
+                            variant="ghost"
+                            onClick={() => handleToggleActive(currency)}
+                          >
+                            Активирай
+                          </Button>
+                        </Flex>
+                      </Box>
+                    ))
+                  )}
+                </VStack>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        </Box>
+
+        {/* Exchange Rates */}
+        <Box gridColumn={{ xl: 'span 2' }} bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} overflow="hidden">
+          <Flex p={4} borderBottom="1px" borderColor={borderColor} justify="space-between" align="center">
+            <HStack>
+              <Heading size="md">Обменни курсове</Heading>
+              {selectedCurrency && (
+                <Text fontSize="sm" color="gray.500">(филтрирано по {selectedCurrency})</Text>
+              )}
+            </HStack>
+            {selectedCurrency && (
+              <Button size="sm" variant="link" colorScheme="blue" onClick={() => setSelectedCurrency(null)}>
+                Покажи всички
+              </Button>
+            )}
+          </Flex>
+
+          {loadingRates ? (
+            <Flex align="center" justify="center" h="48">
+              <Spinner size="lg" color="blue.500" />
+            </Flex>
+          ) : (
+            <TableContainer maxH="400px" overflowY="auto">
+              <Table size="sm">
+                <Thead bg={tableHeaderBg} position="sticky" top={0}>
+                  <Tr>
+                    <Th>От</Th>
+                    <Th>Към</Th>
+                    <Th isNumeric>Курс</Th>
+                    <Th>Дата</Th>
+                    <Th>Източник</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {filteredRates.length === 0 ? (
+                    <Tr>
+                      <Td colSpan={5} textAlign="center" py={8} color="gray.500">
+                        Няма обменни курсове. Натиснете "Обнови от ЕЦБ".
+                      </Td>
+                    </Tr>
+                  ) : (
+                    filteredRates.map((rate) => (
+                      <Tr key={rate.id} _hover={{ bg: hoverBg }}>
+                        <Td>
+                          <Badge variant="subtle" colorScheme="gray">{getCurrencyCode(rate.from_currency_id)}</Badge>
+                        </Td>
+                        <Td>
+                          <Badge variant="subtle" colorScheme="gray">{getCurrencyCode(rate.to_currency_id)}</Badge>
+                        </Td>
+                        <Td isNumeric fontFamily="mono" fontWeight="medium">{rate.rate?.toFixed(4) || '0.0000'}</Td>
+                        <Td fontSize="sm" color="gray.500">{formatDate(rate.valid_date)}</Td>
+                        <Td>
+                          <Badge
+                            colorScheme={
+                              rate.rate_source === 'ECB' ? 'green' :
+                              rate.rate_source === 'FIXED' ? 'blue' : 'gray'
+                            }
+                          >
+                            {rate.rate_source}
+                          </Badge>
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </Tbody>
+              </Table>
+            </TableContainer>
           )}
-        </div>
-      </div>
+        </Box>
+      </SimpleGrid>
 
       {/* Fixed Rate Info */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-green-900">Фиксиран курс BGN/EUR</h3>
-            <p className="mt-1 text-sm text-green-700">
-              Българският лев е фиксиран към еврото по силата на валутен борд
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-green-800">1.95583</div>
-            <div className="text-sm text-green-600">BGN за 1 EUR</div>
-          </div>
-        </div>
-      </div>
+      <Flex
+        justify="space-between"
+        align="center"
+        p={6}
+        bgGradient="linear(to-r, green.50, teal.50)"
+        border="1px"
+        borderColor="green.200"
+        borderRadius="lg"
+      >
+        <Box>
+          <Heading size="md" color="green.900">Фиксиран курс BGN/EUR</Heading>
+          <Text mt={1} fontSize="sm" color="green.700">
+            Българският лев е фиксиран към еврото по силата на валутен борд
+          </Text>
+        </Box>
+        <Box textAlign="right">
+          <Text fontSize="3xl" fontWeight="bold" color="green.800">1.95583</Text>
+          <Text fontSize="sm" color="green.600">BGN за 1 EUR</Text>
+        </Box>
+      </Flex>
 
       {/* Add Currency Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Добави валута от ЕЦБ</h3>
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              </div>
-              <input
-                type="text"
-                placeholder="Търси по код или име..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="mt-3 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              />
-            </div>
-            <div className="overflow-y-auto max-h-[400px]">
+      <Modal isOpen={isOpen} onClose={onClose} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Добави валута от ЕЦБ</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <Input
+              placeholder="Търси по код или име..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              mb={4}
+            />
+            <Box maxH="400px" overflowY="auto">
               {filteredAvailable.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">
+                <Text textAlign="center" color="gray.500" py={8}>
                   {searchTerm ? 'Няма намерени валути' : 'Всички валути от ЕЦБ са добавени'}
-                </p>
+                </Text>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <VStack spacing={0} align="stretch" divider={<Box borderBottom="1px" borderColor="gray.100" />}>
                   {filteredAvailable.map(currency => (
-                    <div
+                    <Flex
                       key={currency.code}
-                      className="p-3 hover:bg-gray-50 flex items-center justify-between"
+                      p={3}
+                      justify="space-between"
+                      align="center"
+                      _hover={{ bg: 'gray.50' }}
                     >
-                      <div className="flex items-center">
-                        <span className="text-lg font-bold text-gray-600 w-10">
+                      <HStack>
+                        <Text fontSize="lg" fontWeight="bold" color="gray.600" w={10}>
                           {currency.symbol}
-                        </span>
-                        <div className="ml-2">
-                          <div className="text-sm font-medium text-gray-900">
+                        </Text>
+                        <Box ml={2}>
+                          <Text fontSize="sm" fontWeight="medium">
                             {currency.code} - {currency.name}
-                          </div>
-                          <div className="text-xs text-gray-500">{currency.nameBg}</div>
-                        </div>
-                      </div>
-                      <button
+                          </Text>
+                          <Text fontSize="xs" color="gray.500">{currency.nameBg}</Text>
+                        </Box>
+                      </HStack>
+                      <Button
+                        size="sm"
+                        colorScheme="blue"
                         onClick={() => handleAddCurrency(currency)}
-                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                       >
                         Добави
-                      </button>
-                    </div>
+                      </Button>
+                    </Flex>
                   ))}
-                </div>
+                </VStack>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            </Box>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+    </VStack>
   );
 }

@@ -1,5 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Heading,
+  Text,
+  SimpleGrid,
+  Flex,
+  Button,
+  Badge,
+  VStack,
+  HStack,
+  Spinner,
+  useColorModeValue,
+  Link,
+  Divider,
+} from '@chakra-ui/react';
 import { companiesApi } from '../api/companies';
 import { currenciesApi } from '../api/currencies';
 import { fixedAssetCategoriesApi } from '../api/fixedAssetCategories';
@@ -10,20 +25,71 @@ interface SummaryCardProps {
   title: string;
   value: string | number;
   hint: string;
-  accent: string;
+  colorScheme: string;
 }
 
-function SummaryCard({ title, value, hint, accent }: SummaryCardProps) {
+function SummaryCard({ title, value, hint, colorScheme }: SummaryCardProps) {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.100', 'gray.700');
+
   return (
-    <div className="bg-white border border-gray-100 shadow-sm rounded-lg px-5 py-4 flex flex-col justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <p className="mt-2 text-2xl font-semibold text-gray-900">{value}</p>
-      </div>
-      <p className={`mt-4 text-xs font-medium px-2 py-1 rounded-full inline-flex ${accent}`}>
+    <Box
+      bg={cardBg}
+      border="1px"
+      borderColor={borderColor}
+      borderRadius="lg"
+      px={5}
+      py={4}
+      shadow="sm"
+    >
+      <Text fontSize="sm" fontWeight="medium" color="gray.500">
+        {title}
+      </Text>
+      <Text mt={2} fontSize="2xl" fontWeight="semibold">
+        {value}
+      </Text>
+      <Badge mt={4} colorScheme={colorScheme} fontSize="xs">
         {hint}
-      </p>
-    </div>
+      </Badge>
+    </Box>
+  );
+}
+
+interface QuickActionProps {
+  to: string;
+  icon: string;
+  title: string;
+  description: string;
+}
+
+function QuickAction({ to, icon, title, description }: QuickActionProps) {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.100', 'gray.700');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+
+  return (
+    <Link
+      as={RouterLink}
+      to={to}
+      _hover={{ textDecoration: 'none' }}
+    >
+      <Flex
+        align="center"
+        p={3}
+        borderRadius="md"
+        border="1px"
+        borderColor={borderColor}
+        bg={cardBg}
+        _hover={{ bg: hoverBg }}
+        transition="all 0.2s"
+      >
+        <Text fontSize="2xl" mr={3}>{icon}</Text>
+        <Box>
+          <Text fontSize="sm" fontWeight="medium">{title}</Text>
+          <Text fontSize="xs" color="gray.500">{description}</Text>
+        </Box>
+      </Flex>
+    </Link>
   );
 }
 
@@ -33,6 +99,9 @@ export default function HomePage() {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [categories, setCategories] = useState<FixedAssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.100', 'gray.700');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,165 +132,160 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-      </div>
+      <Flex align="center" justify="center" h="64">
+        <Spinner size="lg" color="blue.500" />
+      </Flex>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <VStack spacing={6} align="stretch">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Начално табло</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Обобщение на системата • EUR базова валута (България в еврозоната от 2025)
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link
+      <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
+        <Box>
+          <Heading size="lg">Начално табло</Heading>
+          <Text mt={1} fontSize="sm" color="gray.500">
+            Обобщение на системата - EUR базова валута (България в еврозоната от 2025)
+          </Text>
+        </Box>
+        <HStack spacing={3}>
+          <Button
+            as={RouterLink}
             to="/journal/entries/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+            colorScheme="blue"
+            size="sm"
           >
-            📝 Нов запис
-          </Link>
-          <Link
+            Нов запис
+          </Button>
+          <Button
+            as={RouterLink}
             to="/companies"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            variant="outline"
+            size="sm"
           >
-            🏢 Компании
-          </Link>
-        </div>
-      </div>
+            Компании
+          </Button>
+        </HStack>
+      </Flex>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={6}>
         <SummaryCard
           title="Компании"
           value={companies.length}
           hint={companies.length > 0 ? `${companies.filter((c: Company) => c.isActive).length} активни` : 'Създайте първата компания'}
-          accent="bg-blue-100 text-blue-700"
+          colorScheme="blue"
         />
         <SummaryCard
           title="Базова валута"
           value={baseCurrency?.code || 'EUR'}
           hint="Фиксиран курс BGN/EUR: 1.95583"
-          accent="bg-green-100 text-green-700"
+          colorScheme="green"
         />
         <SummaryCard
           title="Валути"
           value={currencies.length}
           hint="Курсове от ЕЦБ"
-          accent="bg-purple-100 text-purple-700"
+          colorScheme="purple"
         />
         <SummaryCard
           title="Категории ДА"
           value={categories.length}
           hint="Данъчни категории по ЗКПО"
-          accent="bg-teal-100 text-teal-700"
+          colorScheme="teal"
         />
-      </div>
+      </SimpleGrid>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <SimpleGrid columns={{ base: 1, xl: 3 }} spacing={6}>
         {/* Companies List */}
-        <div className="xl:col-span-2 bg-white border border-gray-100 shadow-sm rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Компании</h3>
-            <Link to="/companies" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-              Управление →
+        <Box
+          gridColumn={{ xl: 'span 2' }}
+          bg={cardBg}
+          border="1px"
+          borderColor={borderColor}
+          borderRadius="lg"
+          p={6}
+          shadow="sm"
+        >
+          <Flex justify="space-between" align="center" mb={4}>
+            <Heading size="md">Компании</Heading>
+            <Link as={RouterLink} to="/companies" color="blue.500" fontSize="sm" fontWeight="medium">
+              Управление
             </Link>
-          </div>
+          </Flex>
+
           {companies.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">Няма създадени компании</p>
-              <Link
-                to="/companies"
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-              >
+            <VStack py={8}>
+              <Text color="gray.500" mb={4}>Няма създадени компании</Text>
+              <Button as={RouterLink} to="/companies" colorScheme="blue">
                 Създай компания
-              </Link>
-            </div>
+              </Button>
+            </VStack>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <VStack align="stretch" divider={<Divider />} spacing={0}>
               {companies.slice(0, 5).map((company: Company) => (
-                <li key={company.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{company.name}</p>
-                    <p className="text-xs text-gray-500">
-                      ЕИК: {company.eik} {company.vatNumber && `• ДДС: ${company.vatNumber}`}
-                      {company.city && ` • ${company.city}`}
-                    </p>
-                  </div>
-                  <span className={`px-2 py-0.5 text-xs rounded-full ${
-                    company.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                  }`}>
+                <Flex key={company.id} py={3} justify="space-between" align="center">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium">{company.name}</Text>
+                    <Text fontSize="xs" color="gray.500">
+                      ЕИК: {company.eik} {company.vatNumber && `| ДДС: ${company.vatNumber}`}
+                      {company.city && ` | ${company.city}`}
+                    </Text>
+                  </Box>
+                  <Badge colorScheme={company.isActive ? 'green' : 'gray'}>
                     {company.isActive ? 'Активна' : 'Неактивна'}
-                  </span>
-                </li>
+                  </Badge>
+                </Flex>
               ))}
-            </ul>
+            </VStack>
           )}
-        </div>
+        </Box>
 
         {/* Quick Actions */}
-        <div className="bg-white border border-gray-100 shadow-sm rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Бързи действия</h3>
-          <div className="space-y-3">
-            <Link
+        <Box
+          bg={cardBg}
+          border="1px"
+          borderColor={borderColor}
+          borderRadius="lg"
+          p={6}
+          shadow="sm"
+        >
+          <Heading size="md" mb={4}>Бързи действия</Heading>
+          <VStack spacing={3} align="stretch">
+            <QuickAction
               to="/journal/entries/new"
-              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-2xl mr-3">📝</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Нов счетоводен запис</p>
-                <p className="text-xs text-gray-500">Създай дневникова статия</p>
-              </div>
-            </Link>
-            <Link
+              icon="+"
+              title="Нов счетоводен запис"
+              description="Създай дневникова статия"
+            />
+            <QuickAction
               to="/accounts"
-              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-2xl mr-3">🗂️</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Сметкоплан</p>
-                <p className="text-xs text-gray-500">Управление на сметки</p>
-              </div>
-            </Link>
-            <Link
+              icon="="
+              title="Сметкоплан"
+              description="Управление на сметки"
+            />
+            <QuickAction
               to="/counterparts"
-              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-2xl mr-3">👥</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Контрагенти</p>
-                <p className="text-xs text-gray-500">Клиенти и доставчици</p>
-              </div>
-            </Link>
-            <Link
+              icon="@"
+              title="Контрагенти"
+              description="Клиенти и доставчици"
+            />
+            <QuickAction
               to="/reports"
-              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-2xl mr-3">📄</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Отчети</p>
-                <p className="text-xs text-gray-500">Справки и отчети</p>
-              </div>
-            </Link>
-            <Link
+              icon="#"
+              title="Отчети"
+              description="Справки и отчети"
+            />
+            <QuickAction
               to="/settings"
-              className="flex items-center p-3 rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-2xl mr-3">⚙️</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Настройки</p>
-                <p className="text-xs text-gray-500">Конфигурация на системата</p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+              icon="*"
+              title="Настройки"
+              description="Конфигурация на системата"
+            />
+          </VStack>
+        </Box>
+      </SimpleGrid>
+    </VStack>
   );
 }
