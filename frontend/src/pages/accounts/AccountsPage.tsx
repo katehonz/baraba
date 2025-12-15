@@ -1,4 +1,33 @@
 import { useState, useEffect } from 'react';
+import {
+  Button,
+  Heading,
+  Text,
+  VStack,
+  HStack,
+  Badge,
+  Spinner,
+  Center,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  FormControl,
+  FormLabel,
+  Input,
+  Select,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
+  useColorModeValue,
+  useDisclosure,
+} from '@chakra-ui/react';
 import { accountsApi } from '../../api/accounts';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Account, AccountType } from '../../types';
@@ -14,9 +43,11 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ code: '', name: '', accountType: 'ASSET' as AccountType });
   const { currentCompany } = useCompany();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const tableBg = useColorModeValue('white', 'gray.800');
 
   useEffect(() => {
     if (currentCompany) {
@@ -44,7 +75,7 @@ export default function AccountsPage() {
         ...formData,
         companyId: currentCompany.id,
       });
-      setShowForm(false);
+      onClose();
       setFormData({ code: '', name: '', accountType: 'ASSET' });
       loadAccounts();
     } catch (error) {
@@ -53,86 +84,105 @@ export default function AccountsPage() {
   };
 
   if (!currentCompany) {
-    return <div>Моля, изберете фирма</div>;
+    return (
+      <Center h="200px">
+        <Text color="gray.500">Моля, изберете фирма</Text>
+      </Center>
+    );
   }
 
-  if (isLoading) return <div>Зареждане...</div>;
+  if (isLoading) {
+    return (
+      <Center h="200px">
+        <Spinner size="xl" color="brand.500" />
+      </Center>
+    );
+  }
 
   return (
-    <div className="accounts-page">
-      <div className="page-header">
-        <h1>Сметкоплан</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">Нова сметка</button>
-      </div>
+    <VStack spacing={6} align="stretch">
+      <HStack justify="space-between">
+        <Heading size="lg">Сметкоплан</Heading>
+        <Button colorScheme="brand" onClick={onOpen}>Нова сметка</Button>
+      </HStack>
 
-      {showForm && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Нова сметка</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Код</label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  required
-                  placeholder="напр. 401"
-                />
-              </div>
-              <div className="form-group">
-                <label>Наименование</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Тип</label>
-                <select
-                  value={formData.accountType}
-                  onChange={(e) => setFormData({ ...formData, accountType: e.target.value as AccountType })}
-                >
-                  {ACCOUNT_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowForm(false)}>Отказ</button>
-                <button type="submit" className="btn-primary">Създай</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <form onSubmit={handleSubmit}>
+            <ModalHeader>Нова сметка</ModalHeader>
+            <ModalBody>
+              <VStack spacing={4}>
+                <FormControl isRequired>
+                  <FormLabel>Код</FormLabel>
+                  <Input
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    placeholder="напр. 401"
+                  />
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel>Наименование</FormLabel>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Тип</FormLabel>
+                  <Select
+                    value={formData.accountType}
+                    onChange={(e) => setFormData({ ...formData, accountType: e.target.value as AccountType })}
+                  >
+                    {ACCOUNT_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </Select>
+                </FormControl>
+              </VStack>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="ghost" mr={3} onClick={onClose}>Отказ</Button>
+              <Button colorScheme="brand" type="submit">Създай</Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
 
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Код</th>
-            <th>Наименование</th>
-            <th>Тип</th>
-            <th>Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          {accounts.length === 0 ? (
-            <tr><td colSpan={4}>Няма сметки</td></tr>
-          ) : (
-            accounts.map((account) => (
-              <tr key={account.id}>
-                <td><strong>{account.code}</strong></td>
-                <td>{account.name}</td>
-                <td>{ACCOUNT_TYPES.find(t => t.value === account.accountType)?.label}</td>
-                <td>{account.isActive ? 'Активна' : 'Неактивна'}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+      <TableContainer bg={tableBg} borderRadius="xl" boxShadow="sm">
+        <Table variant="simple">
+          <Thead>
+            <Tr>
+              <Th>Код</Th>
+              <Th>Наименование</Th>
+              <Th>Тип</Th>
+              <Th>Статус</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {accounts.length === 0 ? (
+              <Tr>
+                <Td colSpan={4}>
+                  <Text color="gray.500" textAlign="center">Няма сметки</Text>
+                </Td>
+              </Tr>
+            ) : (
+              accounts.map((account) => (
+                <Tr key={account.id}>
+                  <Td fontWeight="bold">{account.code}</Td>
+                  <Td>{account.name}</Td>
+                  <Td>{ACCOUNT_TYPES.find(t => t.value === account.accountType)?.label}</Td>
+                  <Td>
+                    <Badge colorScheme={account.isActive ? 'green' : 'gray'}>
+                      {account.isActive ? 'Активна' : 'Неактивна'}
+                    </Badge>
+                  </Td>
+                </Tr>
+              ))
+            )}
+          </Tbody>
+        </Table>
+      </TableContainer>
+    </VStack>
   );
 }

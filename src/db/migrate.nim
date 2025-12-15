@@ -4,6 +4,7 @@
 import norm/[model, postgres]
 import std/times
 import ../models/[user, currency, company, account, counterpart, vatrate, journal, exchangerate]
+import ../services/auth
 import config
 
 proc runMigrations*() =
@@ -52,6 +53,8 @@ proc seedInitialData*() =
   let db = openDb()
   try:
     # Try to insert admin group - will fail if exists due to unique constraint
+    # Create admin group
+    var adminGroupId: int64 = 0
     try:
       var adminGroup = newUserGroup(
         name = "Администратори",
@@ -64,6 +67,7 @@ proc seedInitialData*() =
         can_post_entries = true
       )
       db.insert(adminGroup)
+      adminGroupId = adminGroup.id
       echo "Created admin group (id: " & $adminGroup.id & ")"
 
       var userGroup = newUserGroup(
@@ -80,6 +84,27 @@ proc seedInitialData*() =
       echo "Created user group (id: " & $userGroup.id & ")"
     except:
       echo "- User groups already exist, skipping..."
+      # Get existing admin group id
+      var groups = @[newUserGroup()]
+      db.select(groups, "name = $1", "Администратори")
+      if groups.len > 0:
+        adminGroupId = groups[0].id
+
+    # Create default admin user
+    # Default credentials: admin / admin123
+    if adminGroupId > 0:
+      try:
+        var adminUser = newUser(
+          username = "admin",
+          email = "admin@baraba.local",
+          password_hash = hashPassword("admin123"),
+          group_id = adminGroupId,
+          is_active = true
+        )
+        db.insert(adminUser)
+        echo "Created admin user (username: admin, password: admin123)"
+      except:
+        echo "- Admin user already exists, skipping..."
 
     # Try to insert currencies
     try:

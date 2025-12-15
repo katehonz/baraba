@@ -20,6 +20,11 @@ const corsHeaders* = @{
   "Access-Control-Allow-Headers": "Content-Type, Authorization"
 }
 
+const jsonCors* = @{
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*"
+}
+
 router mainRouter:
   # =====================
   # CORS preflight
@@ -46,14 +51,14 @@ router mainRouter:
   # Health check
   # =====================
   get "/":
-    resp Http200, {"Content-Type": "application/json"}, $(%*{
+    resp Http200, jsonCors, $(%*{
       "name": "Baraba API",
       "version": "0.1.0",
       "description": "Счетоводна програма REST API"
     })
 
   get "/health":
-    resp Http200, {"Content-Type": "application/json"}, $(%*{"status": "ok"})
+    resp Http200, jsonCors, $(%*{"status": "ok"})
 
   # =====================
   # AUTH ROUTES
@@ -70,12 +75,12 @@ router mainRouter:
     if userOpt.isSome:
       let user = userOpt.get
       let token = generateToken(user.id, user.username)
-      resp Http200, {"Content-Type": "application/json"}, $(%*{
+      resp Http200, jsonCors, $(%*{
         "token": token,
         "user": {"id": user.id, "username": user.username, "email": user.email}
       })
     else:
-      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалидно потребителско име или парола"})
+      resp Http401, jsonCors, $(%*{"error": "Невалидно потребителско име или парола"})
 
   post "/api/auth/register":
     let body = parseJson(request.body)
@@ -88,24 +93,24 @@ router mainRouter:
     try:
       let user = createUser(db, username, email, password, groupId)
       let token = generateToken(user.id, user.username)
-      resp Http201, {"Content-Type": "application/json"}, $(%*{
+      resp Http201, jsonCors, $(%*{
         "token": token,
         "user": {"id": user.id, "username": user.username, "email": user.email}
       })
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
   get "/api/auth/me":
     let authHeader = request.headers.getOrDefault("Authorization")
     if authHeader.len == 0 or not authHeader.startsWith("Bearer "):
-      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Липсва токен"})
+      resp Http401, jsonCors, $(%*{"error": "Липсва токен"})
 
     let token = authHeader[7..^1]
     let (valid, userId, _) = verifyToken(token)
     if not valid:
-      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалиден токен"})
+      resp Http401, jsonCors, $(%*{"error": "Невалиден токен"})
 
     let db = getDbConn()
     let userOpt = getUserById(db, userId)
@@ -113,11 +118,11 @@ router mainRouter:
 
     if userOpt.isSome:
       let user = userOpt.get
-      resp Http200, {"Content-Type": "application/json"}, $(%*{
+      resp Http200, jsonCors, $(%*{
         "id": user.id, "username": user.username, "email": user.email
       })
     else:
-      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Потребителят не е намерен"})
+      resp Http404, jsonCors, $(%*{"error": "Потребителят не е намерен"})
 
   # =====================
   # COMPANY ROUTES
@@ -129,7 +134,7 @@ router mainRouter:
       db.selectAll(companies)
       if companies.len == 1 and companies[0].id == 0:
         companies = @[]
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(companies)
+      resp Http200, jsonCors, $toJsonArray(companies)
     finally:
       releaseDbConn(db)
 
@@ -139,9 +144,9 @@ router mainRouter:
     try:
       var company = newCompany()
       db.select(company, "id = $1", companyId)
-      resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+      resp Http200, jsonCors, $toJson(company)
     except:
-      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+      resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
     finally:
       releaseDbConn(db)
 
@@ -163,9 +168,9 @@ router mainRouter:
         base_currency_id = baseCurrencyId
       )
       db.insert(company)
-      resp Http201, {"Content-Type": "application/json"}, $toJson(company)
+      resp Http201, jsonCors, $toJson(company)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -182,9 +187,9 @@ router mainRouter:
       if body.hasKey("city"): company.city = body["city"].getStr()
       company.updated_at = now()
       db.update(company)
-      resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+      resp Http200, jsonCors, $toJson(company)
     except:
-      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+      resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
     finally:
       releaseDbConn(db)
 
@@ -195,9 +200,9 @@ router mainRouter:
       var company = newCompany()
       db.select(company, "id = $1", companyId)
       db.delete(company)
-      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+      resp Http200, jsonCors, $(%*{"success": true})
     except:
-      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+      resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
     finally:
       releaseDbConn(db)
 
@@ -215,7 +220,7 @@ router mainRouter:
         db.selectAll(accounts)
       if accounts.len == 1 and accounts[0].id == 0:
         accounts = @[]
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
+      resp Http200, jsonCors, $toJsonArray(accounts)
     finally:
       releaseDbConn(db)
 
@@ -227,7 +232,7 @@ router mainRouter:
       db.select(accounts, "company_id = $1 ORDER BY code", companyId)
       if accounts.len == 1 and accounts[0].id == 0:
         accounts = @[]
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
+      resp Http200, jsonCors, $toJsonArray(accounts)
     finally:
       releaseDbConn(db)
 
@@ -246,9 +251,25 @@ router mainRouter:
         parent_id = parentId
       )
       db.insert(account)
-      resp Http201, {"Content-Type": "application/json"}, $toJson(account)
+      resp Http201, jsonCors, $toJson(account)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  get "/api/accounts/@id":
+    let db = getDbConn()
+    try:
+      var account = newAccount()
+      try:
+        db.select(account, "id = $1", parseInt(@"id"))
+      except:
+        resp Http404, jsonCors, $(%*{"error": "Account not found"})
+      if account.id == 0:
+        resp Http404, jsonCors, $(%*{"error": "Account not found"})
+      resp Http200, jsonCors, $toJson(account)
+    except:
+      resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -266,7 +287,7 @@ router mainRouter:
         db.selectAll(counterparts)
       if counterparts.len == 1 and counterparts[0].id == 0:
         counterparts = @[]
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(counterparts)
+      resp Http200, jsonCors, $toJsonArray(counterparts)
     finally:
       releaseDbConn(db)
 
@@ -280,9 +301,25 @@ router mainRouter:
         company_id = body["companyId"].getBiggestInt()
       )
       db.insert(counterpart)
-      resp Http201, {"Content-Type": "application/json"}, $toJson(counterpart)
+      resp Http201, jsonCors, $toJson(counterpart)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  get "/api/counterparts/@id":
+    let db = getDbConn()
+    try:
+      var counterpart = newCounterpart()
+      try:
+        db.select(counterpart, "id = $1", parseInt(@"id"))
+      except:
+        resp Http404, jsonCors, $(%*{"error": "Counterpart not found"})
+      if counterpart.id == 0:
+        resp Http404, jsonCors, $(%*{"error": "Counterpart not found"})
+      resp Http200, jsonCors, $toJson(counterpart)
+    except:
+      resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -300,7 +337,7 @@ router mainRouter:
         db.selectAll(entries)
       if entries.len == 1 and entries[0].id == 0:
         entries = @[]
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(entries)
+      resp Http200, jsonCors, $toJsonArray(entries)
     finally:
       releaseDbConn(db)
 
@@ -350,9 +387,9 @@ router mainRouter:
           db.insert(line)
           inc lineOrder
 
-      resp Http201, {"Content-Type": "application/json"}, $toJson(entry)
+      resp Http201, jsonCors, $toJson(entry)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -371,9 +408,9 @@ router mainRouter:
 
       var entryJson = toJson(entry)
       entryJson["lines"] = toJsonArray(lines)
-      resp Http200, {"Content-Type": "application/json"}, $entryJson
+      resp Http200, jsonCors, $entryJson
     except:
-      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+      resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
     finally:
       releaseDbConn(db)
 
@@ -386,7 +423,7 @@ router mainRouter:
       db.select(entry, "id = $1", entryId)
 
       if entry.is_posted:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да редактирате осчетоводен запис"})
+        resp Http400, jsonCors, $(%*{"error": "Не може да редактирате осчетоводен запис"})
 
       if body.hasKey("documentNumber"): entry.document_number = body["documentNumber"].getStr()
       if body.hasKey("description"): entry.description = body["description"].getStr()
@@ -400,9 +437,9 @@ router mainRouter:
           entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
       entry.updated_at = now()
       db.update(entry)
-      resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+      resp Http200, jsonCors, $toJson(entry)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -414,14 +451,14 @@ router mainRouter:
       db.select(entry, "id = $1", entryId)
 
       if entry.is_posted:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтриете осчетоводен запис"})
+        resp Http400, jsonCors, $(%*{"error": "Не може да изтриете осчетоводен запис"})
 
       # Delete entry lines first
       db.exec(sql"""DELETE FROM "EntryLine" WHERE journal_entry_id = $1""", entryId)
       db.delete(entry)
-      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+      resp Http200, jsonCors, $(%*{"success": true})
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -433,7 +470,7 @@ router mainRouter:
       db.select(entry, "id = $1", entryId)
 
       if entry.is_posted:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Записът вече е осчетоводен"})
+        resp Http400, jsonCors, $(%*{"error": "Записът вече е осчетоводен"})
 
       # Validate debit = credit
       let rows = db.getAllRows(sql"""
@@ -444,7 +481,7 @@ router mainRouter:
         let debitSum = parseFloat($rows[0][0])
         let creditSum = parseFloat($rows[0][1])
         if abs(debitSum - creditSum) > 0.001:
-          resp Http400, {"Content-Type": "application/json"}, $(%*{
+          resp Http400, jsonCors, $(%*{
             "error": "Дебит и кредит не са равни",
             "debit": debitSum,
             "credit": creditSum
@@ -454,9 +491,9 @@ router mainRouter:
       entry.posted_at = some(now())
       entry.updated_at = now()
       db.update(entry)
-      resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+      resp Http200, jsonCors, $toJson(entry)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -468,15 +505,15 @@ router mainRouter:
       db.select(entry, "id = $1", entryId)
 
       if not entry.is_posted:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е осчетоводен"})
+        resp Http400, jsonCors, $(%*{"error": "Записът не е осчетоводен"})
 
       entry.is_posted = false
       entry.posted_at = none(DateTime)
       entry.updated_at = now()
       db.update(entry)
-      resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+      resp Http200, jsonCors, $toJson(entry)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -494,7 +531,7 @@ router mainRouter:
         db.selectAll(lines)
       if lines.len == 1 and lines[0].id == 0:
         lines = @[]
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(lines)
+      resp Http200, jsonCors, $toJsonArray(lines)
     finally:
       releaseDbConn(db)
 
@@ -506,7 +543,7 @@ router mainRouter:
       var entry = newJournalEntry()
       db.select(entry, "id = $1", body["journalEntryId"].getBiggestInt())
       if entry.is_posted:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да добавяте редове към осчетоводен запис"})
+        resp Http400, jsonCors, $(%*{"error": "Не може да добавяте редове към осчетоводен запис"})
 
       # Get next line order
       let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(line_order), 0) FROM "EntryLine" WHERE journal_entry_id = $1""", body["journalEntryId"].getBiggestInt())
@@ -532,9 +569,9 @@ router mainRouter:
         line.exchange_rate = body["exchangeRate"].getFloat()
 
       db.insert(line)
-      resp Http201, {"Content-Type": "application/json"}, $toJson(line)
+      resp Http201, jsonCors, $toJson(line)
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -549,12 +586,12 @@ router mainRouter:
       var entry = newJournalEntry()
       db.select(entry, "id = $1", line.journal_entry_id)
       if entry.is_posted:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтривате редове от осчетоводен запис"})
+        resp Http400, jsonCors, $(%*{"error": "Не може да изтривате редове от осчетоводен запис"})
 
       db.delete(line)
-      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+      resp Http200, jsonCors, $(%*{"success": true})
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -567,7 +604,7 @@ router mainRouter:
     let toDate = request.params.getOrDefault("toDate", "")
 
     if companyId == "0":
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId е задължителен"})
+      resp Http400, jsonCors, $(%*{"error": "companyId е задължителен"})
 
     let db = getDbConn()
     try:
@@ -609,7 +646,7 @@ router mainRouter:
           "closingCredit": closingCredit
         })
 
-      resp Http200, {"Content-Type": "application/json"}, $(%*{
+      resp Http200, jsonCors, $(%*{
         "companyId": parseInt(companyId),
         "fromDate": fromDate,
         "toDate": toDate,
@@ -625,7 +662,7 @@ router mainRouter:
     let toDate = request.params.getOrDefault("toDate", "")
 
     if companyId == "0" or accountId == "0":
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId и accountId са задължителни"})
+      resp Http400, jsonCors, $(%*{"error": "companyId и accountId са задължителни"})
 
     let db = getDbConn()
     try:
@@ -688,7 +725,7 @@ router mainRouter:
           "balance": runningDebit - runningCredit
         })
 
-      resp Http200, {"Content-Type": "application/json"}, $(%*{
+      resp Http200, jsonCors, $(%*{
         "account": {
           "id": account.id,
           "code": account.code,
@@ -705,7 +742,7 @@ router mainRouter:
         "closingBalance": runningDebit - runningCredit
       })
     except:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
       releaseDbConn(db)
 
@@ -714,7 +751,7 @@ router mainRouter:
   # =====================
   post "/graphql":
     if graphqlCtx.isNil:
-      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "GraphQL not initialized"})
+      resp Http500, jsonCors, $(%*{"error": "GraphQL not initialized"})
 
     let body = parseJson(request.body)
     let query = body.getOrDefault("query").getStr("")
@@ -722,7 +759,7 @@ router mainRouter:
     let operationName = body.getOrDefault("operationName").getStr("")
 
     if query.len == 0:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Query is required"})
+      resp Http400, jsonCors, $(%*{"error": "Query is required"})
 
     # Clear previous query state
     graphqlCtx.purgeQueries(includeVariables = true, includeStored = false)
@@ -734,7 +771,7 @@ router mainRouter:
         var errMsgs: seq[string]
         for e in varsRes.error:
           errMsgs.add($e)
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
+        resp Http400, jsonCors, $(%*{"errors": errMsgs})
 
     # Parse and validate query
     let queryRes = graphqlCtx.parseQuery(query)
@@ -742,7 +779,7 @@ router mainRouter:
       var errMsgs: seq[string]
       for e in queryRes.error:
         errMsgs.add($e)
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
+      resp Http400, jsonCors, $(%*{"errors": errMsgs})
 
     # Execute
     let jsonResp = JsonRespStream.new()
@@ -751,10 +788,10 @@ router mainRouter:
       var errMsgs: seq[string]
       for e in execRes.error:
         errMsgs.add($e)
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
+      resp Http400, jsonCors, $(%*{"errors": errMsgs})
 
     let response = jsonResp.getString()
-    resp Http200, {"Content-Type": "application/json"}, response
+    resp Http200, jsonCors, response
 
   get "/graphql":
     # GraphiQL interface

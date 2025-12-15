@@ -1,15 +1,11 @@
-:root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
+/* Minimal global styles - Chakra UI handles most styling */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+/* Remove default link underlines */
+a {
+  text-decoration: none;
 }

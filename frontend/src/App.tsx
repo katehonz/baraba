@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Center, Spinner, Text, VStack } from '@chakra-ui/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CompanyProvider } from './contexts/CompanyContext';
 import Layout from './components/Layout';
@@ -10,7 +11,6 @@ import CompaniesPage from './pages/companies/CompaniesPage';
 import AccountsPage from './pages/accounts/AccountsPage';
 import CounterpartsPage from './pages/counterparts/CounterpartsPage';
 import JournalPage from './pages/journal/JournalPage';
-import './App.css';
 
 const queryClient = new QueryClient();
 
@@ -18,7 +18,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="loading">Зареждане...</div>;
+    return (
+      <Center h="100vh">
+        <VStack>
+          <Spinner size="xl" color="brand.500" thickness="4px" />
+          <Text color="gray.500">Зареждане...</Text>
+        </VStack>
+      </Center>
+    );
   }
 
   if (!token) {

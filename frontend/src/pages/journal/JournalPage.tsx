@@ -1,4 +1,33 @@
 import { useState, useEffect } from 'react';
+import {
+  Button,
+  Heading,
+  Text,
+  VStack,
+  HStack,
+  Badge,
+  Spinner,
+  Center,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  FormControl,
+  FormLabel,
+  Input,
+  Textarea,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
+  useColorModeValue,
+  useDisclosure,
+} from '@chakra-ui/react';
 import { journalApi } from '../../api/journal';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { JournalEntry } from '../../types';
@@ -6,13 +35,15 @@ import type { JournalEntry } from '../../types';
 export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     documentNumber: '',
     description: '',
     totalAmount: 0
   });
   const { currentCompany } = useCompany();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const tableBg = useColorModeValue('white', 'gray.800');
 
   useEffect(() => {
     if (currentCompany) {
@@ -40,7 +71,7 @@ export default function JournalPage() {
         ...formData,
         companyId: currentCompany.id,
       });
-      setShowForm(false);
+      onClose();
       setFormData({ documentNumber: '', description: '', totalAmount: 0 });
       loadEntries();
     } catch (error) {
@@ -53,89 +84,105 @@ export default function JournalPage() {
   };
 
   if (!currentCompany) {
-    return <div>Моля, изберете фирма</div>;
+    return (
+      <Center h="200px">
+        <Text color="gray.500">Моля, изберете фирма</Text>
+      </Center>
+    );
   }
 
-  if (isLoading) return <div>Зареждане...</div>;
+  if (isLoading) {
+    return (
+      <Center h="200px">
+        <Spinner size="xl" color="brand.500" />
+      </Center>
+    );
+  }
 
   return (
-    <div className="journal-page">
-      <div className="page-header">
-        <h1>Счетоводен дневник</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">Нов запис</button>
-      </div>
+    <VStack spacing={6} align="stretch">
+      <HStack justify="space-between">
+        <Heading size="lg">Счетоводен дневник</Heading>
+        <Button colorScheme="brand" onClick={onOpen}>Нов запис</Button>
+      </HStack>
 
-      {showForm && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Нов запис</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Номер на документ</label>
-                <input
-                  type="text"
-                  value={formData.documentNumber}
-                  onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Описание</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                />
-              </div>
-              <div className="form-group">
-                <label>Сума</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.totalAmount}
-                  onChange={(e) => setFormData({ ...formData, totalAmount: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowForm(false)}>Отказ</button>
-                <button type="submit" className="btn-primary">Създай</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <form onSubmit={handleSubmit}>
+            <ModalHeader>Нов запис</ModalHeader>
+            <ModalBody>
+              <VStack spacing={4}>
+                <FormControl>
+                  <FormLabel>Номер на документ</FormLabel>
+                  <Input
+                    value={formData.documentNumber}
+                    onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Описание</FormLabel>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Сума</FormLabel>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.totalAmount}
+                    onChange={(e) => setFormData({ ...formData, totalAmount: parseFloat(e.target.value) || 0 })}
+                  />
+                </FormControl>
+              </VStack>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="ghost" mr={3} onClick={onClose}>Отказ</Button>
+              <Button colorScheme="brand" type="submit">Създай</Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
 
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Дата</th>
-            <th>Документ</th>
-            <th>Описание</th>
-            <th>Сума</th>
-            <th>Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.length === 0 ? (
-            <tr><td colSpan={5}>Няма записи</td></tr>
-          ) : (
-            entries.map((entry) => (
-              <tr key={entry.id}>
-                <td>{formatDate(entry.documentDate)}</td>
-                <td>{entry.documentNumber || '-'}</td>
-                <td>{entry.description || '-'}</td>
-                <td className="amount">{entry.totalAmount.toFixed(2)} лв.</td>
-                <td>
-                  {entry.isPosted ? (
-                    <span className="badge posted">Осчетоводен</span>
-                  ) : (
-                    <span className="badge draft">Чернова</span>
-                  )}
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+      <TableContainer bg={tableBg} borderRadius="xl" boxShadow="sm">
+        <Table variant="simple">
+          <Thead>
+            <Tr>
+              <Th>Дата</Th>
+              <Th>Документ</Th>
+              <Th>Описание</Th>
+              <Th isNumeric>Сума</Th>
+              <Th>Статус</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {entries.length === 0 ? (
+              <Tr>
+                <Td colSpan={5}>
+                  <Text color="gray.500" textAlign="center">Няма записи</Text>
+                </Td>
+              </Tr>
+            ) : (
+              entries.map((entry) => (
+                <Tr key={entry.id}>
+                  <Td>{formatDate(entry.documentDate)}</Td>
+                  <Td>{entry.documentNumber || '-'}</Td>
+                  <Td>{entry.description || '-'}</Td>
+                  <Td isNumeric fontFamily="mono">{entry.totalAmount.toFixed(2)} лв.</Td>
+                  <Td>
+                    <Badge colorScheme={entry.isPosted ? 'green' : 'yellow'}>
+                      {entry.isPosted ? 'Осчетоводен' : 'Чернова'}
+                    </Badge>
+                  </Td>
+                </Tr>
+              ))
+            )}
+          </Tbody>
+        </Table>
+      </TableContainer>
+    </VStack>
   );
 }

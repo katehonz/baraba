@@ -1,4 +1,27 @@
 import { useState, useEffect } from 'react';
+import {
+  Box,
+  Button,
+  Grid,
+  Heading,
+  Text,
+  VStack,
+  HStack,
+  Badge,
+  Spinner,
+  Center,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  FormControl,
+  FormLabel,
+  Input,
+  useColorModeValue,
+  useDisclosure,
+} from '@chakra-ui/react';
 import { companiesApi } from '../../api/companies';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Company } from '../../types';
@@ -6,9 +29,14 @@ import type { Company } from '../../types';
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', eik: '', vatNumber: '', address: '', city: '' });
   const { currentCompany, setCurrentCompany } = useCompany();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const selectedBg = useColorModeValue('blue.50', 'blue.900');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
   useEffect(() => {
     loadCompanies();
@@ -29,7 +57,7 @@ export default function CompaniesPage() {
     e.preventDefault();
     try {
       await companiesApi.create(formData);
-      setShowForm(false);
+      onClose();
       setFormData({ name: '', eik: '', vatNumber: '', address: '', city: '' });
       loadCompanies();
     } catch (error) {
@@ -41,90 +69,103 @@ export default function CompaniesPage() {
     setCurrentCompany(company);
   };
 
-  if (isLoading) return <div>Зареждане...</div>;
+  if (isLoading) {
+    return (
+      <Center h="200px">
+        <Spinner size="xl" color="brand.500" />
+      </Center>
+    );
+  }
 
   return (
-    <div className="companies-page">
-      <div className="page-header">
-        <h1>Фирми</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">Нова фирма</button>
-      </div>
+    <VStack spacing={6} align="stretch">
+      <HStack justify="space-between">
+        <Heading size="lg">Фирми</Heading>
+        <Button colorScheme="brand" onClick={onOpen}>Нова фирма</Button>
+      </HStack>
 
-      {showForm && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Нова фирма</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Име</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>ЕИК</label>
-                <input
-                  type="text"
-                  value={formData.eik}
-                  onChange={(e) => setFormData({ ...formData, eik: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>ДДС номер</label>
-                <input
-                  type="text"
-                  value={formData.vatNumber}
-                  onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Адрес</label>
-                <input
-                  type="text"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Град</label>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                />
-              </div>
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowForm(false)}>Отказ</button>
-                <button type="submit" className="btn-primary">Създай</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <form onSubmit={handleSubmit}>
+            <ModalHeader>Нова фирма</ModalHeader>
+            <ModalBody>
+              <VStack spacing={4}>
+                <FormControl isRequired>
+                  <FormLabel>Име</FormLabel>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel>ЕИК</FormLabel>
+                  <Input
+                    value={formData.eik}
+                    onChange={(e) => setFormData({ ...formData, eik: e.target.value })}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>ДДС номер</FormLabel>
+                  <Input
+                    value={formData.vatNumber}
+                    onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Адрес</FormLabel>
+                  <Input
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Град</FormLabel>
+                  <Input
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  />
+                </FormControl>
+              </VStack>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="ghost" mr={3} onClick={onClose}>Отказ</Button>
+              <Button colorScheme="brand" type="submit">Създай</Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
 
-      <div className="companies-list">
-        {companies.length === 0 ? (
-          <p>Няма създадени фирми</p>
-        ) : (
-          companies.map((company) => (
-            <div
+      {companies.length === 0 ? (
+        <Text color="gray.500">Няма създадени фирми</Text>
+      ) : (
+        <Grid templateColumns="repeat(auto-fill, minmax(280px, 1fr))" gap={4}>
+          {companies.map((company) => (
+            <Box
               key={company.id}
-              className={`company-card ${currentCompany?.id === company.id ? 'selected' : ''}`}
+              bg={currentCompany?.id === company.id ? selectedBg : cardBg}
+              p={5}
+              borderRadius="xl"
+              border="2px"
+              borderColor={currentCompany?.id === company.id ? 'brand.500' : borderColor}
+              cursor="pointer"
+              transition="all 0.2s"
               onClick={() => selectCompany(company)}
+              _hover={{ borderColor: 'brand.500', bg: hoverBg }}
             >
-              <h3>{company.name}</h3>
-              <p>ЕИК: {company.eik}</p>
-              {company.vatNumber && <p>ДДС: {company.vatNumber}</p>}
-              {company.city && <p>{company.city}</p>}
-              {currentCompany?.id === company.id && <span className="badge">Избрана</span>}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+              <HStack justify="space-between" align="start" mb={2}>
+                <Heading size="md">{company.name}</Heading>
+                {currentCompany?.id === company.id && (
+                  <Badge colorScheme="blue">Избрана</Badge>
+                )}
+              </HStack>
+              <Text color="gray.500" fontSize="sm">ЕИК: {company.eik}</Text>
+              {company.vatNumber && <Text color="gray.500" fontSize="sm">ДДС: {company.vatNumber}</Text>}
+              {company.city && <Text color="gray.500" fontSize="sm">{company.city}</Text>}
+            </Box>
+          ))}
+        </Grid>
+      )}
+    </VStack>
   );
 }

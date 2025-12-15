@@ -1,6 +1,35 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Button,
+  Center,
+  FormControl,
+  FormLabel,
+  Heading,
+  Input,
+  Link,
+  Text,
+  VStack,
+  Alert,
+  AlertIcon,
+  useColorModeValue,
+  IconButton,
+  useColorMode,
+} from '@chakra-ui/react';
 import { useAuth } from '../../contexts/AuthContext';
+
+const SunIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+  </svg>
+);
 
 export default function RegisterPage() {
   const [username, setUsername] = useState('');
@@ -11,6 +40,13 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const { colorMode, toggleColorMode } = useColorMode();
+
+  const bgGradient = useColorModeValue(
+    'linear(to-br, gray.700, gray.900)',
+    'linear(to-br, gray.900, black)'
+  );
+  const cardBg = useColorModeValue('white', 'gray.800');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,69 +70,101 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <h1>Baraba</h1>
-        <h2>Регистрация</h2>
+    <Center minH="100vh" bgGradient={bgGradient} position="relative">
+      <Box position="absolute" top={4} right={4}>
+        <IconButton
+          aria-label="Toggle color mode"
+          icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+          onClick={toggleColorMode}
+          variant="ghost"
+          color="white"
+          _hover={{ bg: 'whiteAlpha.200' }}
+        />
+      </Box>
 
-        {error && <div className="error-message">{error}</div>}
+      <Box
+        bg={cardBg}
+        p={8}
+        borderRadius="xl"
+        boxShadow="2xl"
+        w="full"
+        maxW="400px"
+        mx={4}
+      >
+        <VStack spacing={6}>
+          <VStack spacing={1}>
+            <Heading size="xl" color="brand.500">Baraba</Heading>
+            <Text color="gray.500">Регистрация</Text>
+          </VStack>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="username">Потребителско име</label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
+          {error && (
+            <Alert status="error" borderRadius="md">
+              <AlertIcon />
+              {error}
+            </Alert>
+          )}
 
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+          <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+            <VStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Потребителско име</FormLabel>
+                <Input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoFocus
+                />
+              </FormControl>
 
-          <div className="form-group">
-            <label htmlFor="password">Парола</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
+              <FormControl isRequired>
+                <FormLabel>Email</FormLabel>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </FormControl>
 
-          <div className="form-group">
-            <label htmlFor="confirmPassword">Потвърди парола</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
+              <FormControl isRequired>
+                <FormLabel>Парола</FormLabel>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={6}
+                />
+              </FormControl>
 
-          <button type="submit" disabled={isLoading} className="btn-primary">
-            {isLoading ? 'Регистрация...' : 'Регистрация'}
-          </button>
-        </form>
+              <FormControl isRequired>
+                <FormLabel>Потвърди парола</FormLabel>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </FormControl>
 
-        <p className="register-link">
-          Имате акаунт? <Link to="/login">Вход</Link>
-        </p>
-      </div>
-    </div>
+              <Button
+                type="submit"
+                colorScheme="brand"
+                size="lg"
+                w="full"
+                isLoading={isLoading}
+                loadingText="Регистрация..."
+              >
+                Регистрация
+              </Button>
+            </VStack>
+          </form>
+
+          <Text color="gray.500" fontSize="sm">
+            Имате акаунт?{' '}
+            <Link as={RouterLink} to="/login" color="brand.500" fontWeight="500">
+              Вход
+            </Link>
+          </Text>
+        </VStack>
+      </Box>
+    </Center>
   );
 }
