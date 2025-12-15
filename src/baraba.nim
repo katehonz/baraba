@@ -1,7 +1,7 @@
 ## Baraba - Счетоводна програма
 ## REST API built with Jester + Nim
 
-import std/[json, strutils, options, times]
+import std/[json, strutils, options, times, math]
 import jester
 import norm/postgres
 
@@ -29,6 +29,13 @@ router mainRouter:
   options "/api/accounts/company/@companyId": resp Http200, corsHeaders, ""
   options "/api/counterparts": resp Http200, corsHeaders, ""
   options "/api/journal-entries": resp Http200, corsHeaders, ""
+  options "/api/journal-entries/@id": resp Http200, corsHeaders, ""
+  options "/api/journal-entries/@id/post": resp Http200, corsHeaders, ""
+  options "/api/journal-entries/@id/unpost": resp Http200, corsHeaders, ""
+  options "/api/entry-lines": resp Http200, corsHeaders, ""
+  options "/api/entry-lines/@id": resp Http200, corsHeaders, ""
+  options "/api/reports/turnover-sheet": resp Http200, corsHeaders, ""
+  options "/api/reports/general-ledger": resp Http200, corsHeaders, ""
 
   # =====================
   # Health check
@@ -296,15 +303,402 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
+      # Get next entry number
+      var maxNum: int64 = 0
+      let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(entry_number), 0) FROM "JournalEntry" WHERE company_id = $1""", body["companyId"].getBiggestInt())
+      if rows.len > 0 and ($rows[0][0]).len > 0:
+        maxNum = parseInt($rows[0][0])
+
       var entry = newJournalEntry(
+        entry_number = int(maxNum + 1),
         document_number = body.getOrDefault("documentNumber").getStr(""),
         description = body.getOrDefault("description").getStr(""),
         total_amount = body.getOrDefault("totalAmount").getFloat(0.0),
         company_id = body["companyId"].getBiggestInt(),
         created_by_id = body.getOrDefault("createdById").getBiggestInt(1)
       )
+      if body.hasKey("documentDate"):
+        entry.document_date = parse(body["documentDate"].getStr(), "yyyy-MM-dd")
+      if body.hasKey("accountingDate"):
+        entry.accounting_date = parse(body["accountingDate"].getStr(), "yyyy-MM-dd")
+      if body.hasKey("documentType"):
+        entry.document_type = body["documentType"].getStr()
+      if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
+        entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
+
       db.insert(entry)
+
+      # Insert entry lines if provided
+      if body.hasKey("lines"):
+        var lineOrder = 1
+        for lineJson in body["lines"]:
+          var line = newEntryLine(
+            journal_entry_id = entry.id,
+            account_id = lineJson["accountId"].getBiggestInt(),
+            debit_amount = lineJson.getOrDefault("debitAmount").getFloat(0.0),
+            credit_amount = lineJson.getOrDefault("creditAmount").getFloat(0.0),
+            description = lineJson.getOrDefault("description").getStr(""),
+            line_order = lineOrder
+          )
+          if lineJson.hasKey("counterpartId") and lineJson["counterpartId"].kind != JNull:
+            line.counterpart_id = some(lineJson["counterpartId"].getBiggestInt())
+          db.insert(line)
+          inc lineOrder
+
       resp Http201, {"Content-Type": "application/json"}, $toJson(entry)
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  get "/api/journal-entries/@id":
+    let entryId = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", entryId)
+
+      # Get entry lines
+      var lines = @[newEntryLine()]
+      db.select(lines, "journal_entry_id = $1 ORDER BY line_order", entryId)
+      if lines.len == 1 and lines[0].id == 0:
+        lines = @[]
+
+      var entryJson = toJson(entry)
+      entryJson["lines"] = toJsonArray(lines)
+      resp Http200, {"Content-Type": "application/json"}, $entryJson
+    except:
+      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+    finally:
+      releaseDbConn(db)
+
+  put "/api/journal-entries/@id":
+    let entryId = parseInt(@"id")
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", entryId)
+
+      if entry.is_posted:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да редактирате осчетоводен запис"})
+
+      if body.hasKey("documentNumber"): entry.document_number = body["documentNumber"].getStr()
+      if body.hasKey("description"): entry.description = body["description"].getStr()
+      if body.hasKey("totalAmount"): entry.total_amount = body["totalAmount"].getFloat()
+      if body.hasKey("documentDate"):
+        entry.document_date = parse(body["documentDate"].getStr(), "yyyy-MM-dd")
+      if body.hasKey("counterpartId"):
+        if body["counterpartId"].kind == JNull:
+          entry.counterpart_id = none(int64)
+        else:
+          entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
+      entry.updated_at = now()
+      db.update(entry)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  delete "/api/journal-entries/@id":
+    let entryId = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", entryId)
+
+      if entry.is_posted:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтриете осчетоводен запис"})
+
+      # Delete entry lines first
+      db.exec(sql"""DELETE FROM "EntryLine" WHERE journal_entry_id = $1""", entryId)
+      db.delete(entry)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  post "/api/journal-entries/@id/post":
+    let entryId = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", entryId)
+
+      if entry.is_posted:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Записът вече е осчетоводен"})
+
+      # Validate debit = credit
+      let rows = db.getAllRows(sql"""
+        SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0)
+        FROM "EntryLine" WHERE journal_entry_id = $1
+      """, entryId)
+      if rows.len > 0:
+        let debitSum = parseFloat($rows[0][0])
+        let creditSum = parseFloat($rows[0][1])
+        if abs(debitSum - creditSum) > 0.001:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{
+            "error": "Дебит и кредит не са равни",
+            "debit": debitSum,
+            "credit": creditSum
+          })
+
+      entry.is_posted = true
+      entry.posted_at = some(now())
+      entry.updated_at = now()
+      db.update(entry)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  post "/api/journal-entries/@id/unpost":
+    let entryId = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", entryId)
+
+      if not entry.is_posted:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е осчетоводен"})
+
+      entry.is_posted = false
+      entry.posted_at = none(DateTime)
+      entry.updated_at = now()
+      db.update(entry)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  # =====================
+  # ENTRY LINE ROUTES
+  # =====================
+  get "/api/entry-lines":
+    let journalEntryId = request.params.getOrDefault("journalEntryId", "0")
+    let db = getDbConn()
+    try:
+      var lines = @[newEntryLine()]
+      if journalEntryId != "0":
+        db.select(lines, "journal_entry_id = $1 ORDER BY line_order", parseInt(journalEntryId))
+      else:
+        db.selectAll(lines)
+      if lines.len == 1 and lines[0].id == 0:
+        lines = @[]
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(lines)
+    finally:
+      releaseDbConn(db)
+
+  post "/api/entry-lines":
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      # Check if journal entry is posted
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", body["journalEntryId"].getBiggestInt())
+      if entry.is_posted:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да добавяте редове към осчетоводен запис"})
+
+      # Get next line order
+      let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(line_order), 0) FROM "EntryLine" WHERE journal_entry_id = $1""", body["journalEntryId"].getBiggestInt())
+      var maxOrder = 0
+      if rows.len > 0 and ($rows[0][0]).len > 0:
+        maxOrder = parseInt($rows[0][0])
+
+      var line = newEntryLine(
+        journal_entry_id = body["journalEntryId"].getBiggestInt(),
+        account_id = body["accountId"].getBiggestInt(),
+        debit_amount = body.getOrDefault("debitAmount").getFloat(0.0),
+        credit_amount = body.getOrDefault("creditAmount").getFloat(0.0),
+        description = body.getOrDefault("description").getStr(""),
+        line_order = maxOrder + 1
+      )
+      if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
+        line.counterpart_id = some(body["counterpartId"].getBiggestInt())
+      if body.hasKey("currencyCode"):
+        line.currency_code = body["currencyCode"].getStr()
+      if body.hasKey("currencyAmount"):
+        line.currency_amount = body["currencyAmount"].getFloat()
+      if body.hasKey("exchangeRate"):
+        line.exchange_rate = body["exchangeRate"].getFloat()
+
+      db.insert(line)
+      resp Http201, {"Content-Type": "application/json"}, $toJson(line)
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  delete "/api/entry-lines/@id":
+    let lineId = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      var line = newEntryLine()
+      db.select(line, "id = $1", lineId)
+
+      # Check if journal entry is posted
+      var entry = newJournalEntry()
+      db.select(entry, "id = $1", line.journal_entry_id)
+      if entry.is_posted:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтривате редове от осчетоводен запис"})
+
+      db.delete(line)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+    except:
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  # =====================
+  # REPORTS ROUTES
+  # =====================
+  get "/api/reports/turnover-sheet":
+    let companyId = request.params.getOrDefault("companyId", "0")
+    let fromDate = request.params.getOrDefault("fromDate", "")
+    let toDate = request.params.getOrDefault("toDate", "")
+
+    if companyId == "0":
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId е задължителен"})
+
+    let db = getDbConn()
+    try:
+      # Query for turnover sheet (Оборотна ведомост)
+      let query = sql"""
+        SELECT
+          a.code,
+          a.name,
+          COALESCE(SUM(CASE WHEN je.document_date < $1::timestamp THEN el.debit_amount ELSE 0 END), 0) as opening_debit,
+          COALESCE(SUM(CASE WHEN je.document_date < $1::timestamp THEN el.credit_amount ELSE 0 END), 0) as opening_credit,
+          COALESCE(SUM(CASE WHEN je.document_date >= $1::timestamp AND je.document_date <= $2::timestamp THEN el.debit_amount ELSE 0 END), 0) as period_debit,
+          COALESCE(SUM(CASE WHEN je.document_date >= $1::timestamp AND je.document_date <= $2::timestamp THEN el.credit_amount ELSE 0 END), 0) as period_credit
+        FROM "Account" a
+        LEFT JOIN "EntryLine" el ON el.account_id = a.id
+        LEFT JOIN "JournalEntry" je ON je.id = el.journal_entry_id AND je.is_posted = true
+        WHERE a.company_id = $3
+        GROUP BY a.id, a.code, a.name
+        ORDER BY a.code
+      """
+      let rows = db.getAllRows(query, fromDate, toDate, parseInt(companyId))
+
+      var accounts = newJArray()
+      for row in rows:
+        let openingDebit = parseFloat($row[2])
+        let openingCredit = parseFloat($row[3])
+        let periodDebit = parseFloat($row[4])
+        let periodCredit = parseFloat($row[5])
+        let closingDebit = openingDebit + periodDebit
+        let closingCredit = openingCredit + periodCredit
+
+        accounts.add(%*{
+          "code": $row[0],
+          "name": $row[1],
+          "openingDebit": openingDebit,
+          "openingCredit": openingCredit,
+          "periodDebit": periodDebit,
+          "periodCredit": periodCredit,
+          "closingDebit": closingDebit,
+          "closingCredit": closingCredit
+        })
+
+      resp Http200, {"Content-Type": "application/json"}, $(%*{
+        "companyId": parseInt(companyId),
+        "fromDate": fromDate,
+        "toDate": toDate,
+        "accounts": accounts
+      })
+    finally:
+      releaseDbConn(db)
+
+  get "/api/reports/general-ledger":
+    let companyId = request.params.getOrDefault("companyId", "0")
+    let accountId = request.params.getOrDefault("accountId", "0")
+    let fromDate = request.params.getOrDefault("fromDate", "")
+    let toDate = request.params.getOrDefault("toDate", "")
+
+    if companyId == "0" or accountId == "0":
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId и accountId са задължителни"})
+
+    let db = getDbConn()
+    try:
+      # Get account info
+      var account = newAccount()
+      db.select(account, "id = $1", parseInt(accountId))
+
+      # Get opening balance
+      let openingRows = db.getAllRows(sql"""
+        SELECT
+          COALESCE(SUM(el.debit_amount), 0),
+          COALESCE(SUM(el.credit_amount), 0)
+        FROM "EntryLine" el
+        JOIN "JournalEntry" je ON je.id = el.journal_entry_id
+        WHERE el.account_id = $1 AND je.is_posted = true AND je.document_date < $2::timestamp
+      """, parseInt(accountId), fromDate)
+
+      var openingDebit = 0.0
+      var openingCredit = 0.0
+      if openingRows.len > 0:
+        openingDebit = parseFloat($openingRows[0][0])
+        openingCredit = parseFloat($openingRows[0][1])
+
+      # Get transactions
+      let transRows = db.getAllRows(sql"""
+        SELECT
+          je.document_date,
+          je.entry_number,
+          je.document_number,
+          je.description,
+          el.debit_amount,
+          el.credit_amount,
+          el.description as line_description
+        FROM "EntryLine" el
+        JOIN "JournalEntry" je ON je.id = el.journal_entry_id
+        WHERE el.account_id = $1 AND je.is_posted = true
+          AND je.document_date >= $2::timestamp AND je.document_date <= $3::timestamp
+        ORDER BY je.document_date, je.entry_number
+      """, parseInt(accountId), fromDate, toDate)
+
+      var transactions = newJArray()
+      var runningDebit = openingDebit
+      var runningCredit = openingCredit
+
+      for row in transRows:
+        let debit = parseFloat($row[4])
+        let credit = parseFloat($row[5])
+        runningDebit += debit
+        runningCredit += credit
+        let lineDesc = $row[6]
+        let entryDesc = $row[3]
+
+        transactions.add(%*{
+          "date": $row[0],
+          "entryNumber": $row[1],
+          "documentNumber": $row[2],
+          "description": if lineDesc.len > 0: lineDesc else: entryDesc,
+          "debit": debit,
+          "credit": credit,
+          "balance": runningDebit - runningCredit
+        })
+
+      resp Http200, {"Content-Type": "application/json"}, $(%*{
+        "account": {
+          "id": account.id,
+          "code": account.code,
+          "name": account.name
+        },
+        "fromDate": fromDate,
+        "toDate": toDate,
+        "openingDebit": openingDebit,
+        "openingCredit": openingCredit,
+        "openingBalance": openingDebit - openingCredit,
+        "transactions": transactions,
+        "closingDebit": runningDebit,
+        "closingCredit": runningCredit,
+        "closingBalance": runningDebit - runningCredit
+      })
     except:
       resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
     finally:
