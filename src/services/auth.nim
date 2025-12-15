@@ -4,9 +4,6 @@ import norm/postgres
 import ../models/user
 import ../db/config
 
-# Re-export openDb for convenience
-export config.openDb
-
 const
   JwtSecret* = "your-secret-key-change-in-production-min-32-chars!"
   JwtExpirationHours* = 24
@@ -16,7 +13,6 @@ type
 
 proc hashPassword*(password: string): string =
   # Simple hash for demo - use bcrypt in production
-  # Using base64 encoding of password for simplicity
   encode(password & JwtSecret)
 
 proc verifyPassword*(password, hash: string): bool =
@@ -54,53 +50,41 @@ proc verifyToken*(token: string): tuple[valid: bool, userId: int64, username: st
   except:
     discard
 
-proc authenticateUser*(username, password: string): Option[User] =
-  let db = openDb()
-  try:
-    var users = @[newUser()]
-    db.select(users, "username = $1 AND is_active = true", username)
-    if users.len > 0 and users[0].id != 0:
-      let user = users[0]
-      if verifyPassword(password, user.password_hash):
-        return some(user)
-  finally:
-    close(db)
+proc authenticateUser*(db: DbConn, username, password: string): Option[User] =
+  var users = @[newUser()]
+  db.select(users, "username = $1 AND is_active = true", username)
+  if users.len > 0 and users[0].id != 0:
+    let user = users[0]
+    if verifyPassword(password, user.password_hash):
+      return some(user)
   return none(User)
 
-proc getUserById*(userId: int64): Option[User] =
-  let db = openDb()
+proc getUserById*(db: DbConn, userId: int64): Option[User] =
+  var user = newUser()
   try:
-    var user = newUser()
     db.select(user, "id = $1", userId)
-    return some(user)
+    if user.id != 0:
+      return some(user)
   except:
     discard
-  finally:
-    close(db)
   return none(User)
 
-proc createUser*(username, email, password: string, groupId: int64): User =
+proc createUser*(db: DbConn, username, email, password: string, groupId: int64): User =
   var user = newUser(
     username = username,
     email = email,
     password_hash = hashPassword(password),
     group_id = groupId
   )
-  let db = openDb()
-  try:
-    db.insert(user)
-  finally:
-    close(db)
+  db.insert(user)
   return user
 
-proc getUserGroup*(groupId: int64): Option[UserGroup] =
-  let db = openDb()
+proc getUserGroup*(db: DbConn, groupId: int64): Option[UserGroup] =
   try:
     var group = newUserGroup()
     db.select(group, "id = $1", groupId)
-    return some(group)
+    if group.id != 0:
+      return some(group)
   except:
     discard
-  finally:
-    close(db)
   return none(UserGroup)

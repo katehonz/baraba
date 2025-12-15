@@ -1,118 +1,111 @@
-import std/[json, options, strutils, times]
+import std/[json, strutils, options, times]
 import jester
 import norm/postgres
+
 import ../models/counterpart
 import ../db/config
 import ../utils/json_utils
 
 proc counterpartRoutes*(): auto =
   router counterpartRouter:
+    # Logic from baraba.nim, adapted for pool
     get "/api/counterparts":
       let companyId = request.params.getOrDefault("companyId", "0")
-      let db = openDb()
+      let db = getDbConn()
       try:
-        var counterparts: seq[Counterpart] = @[]
+        var counterparts = @[newCounterpart()]
         if companyId != "0":
-          db.select(counterparts, "\"companyId\" = $1 ORDER BY name", parseInt(companyId))
+          db.select(counterparts, "company_id = $1 ORDER BY name", parseInt(companyId))
         else:
           db.selectAll(counterparts)
+        if counterparts.len == 1 and counterparts[0].id == 0:
+          counterparts = @[]
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(counterparts)
       finally:
-        close(db)
+        releaseDbConn(db)
+
+    get "/api/counterparts/company/@companyId":
+      let companyId = parseInt(@"companyId")
+      let db = getDbConn()
+      try:
+        var counterparts = @[newCounterpart()]
+        db.select(counterparts, "company_id = $1 ORDER BY name", companyId)
+        if counterparts.len == 1 and counterparts[0].id == 0:
+          counterparts = @[]
+        resp Http200, {"Content-Type": "application/json"}, $toJsonArray(counterparts)
+      finally:
+        releaseDbConn(db)
 
     get "/api/counterparts/@id":
       let counterpartId = parseInt(@"id")
-      let db = openDb()
+      let db = getDbConn()
       try:
         var counterpart = newCounterpart()
         db.select(counterpart, "id = $1", counterpartId)
         resp Http200, {"Content-Type": "application/json"}, $toJson(counterpart)
       except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{
-          "error": "Контрагентът не е намерен"
-        })
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Контрагентът не е намерен"})
       finally:
-        close(db)
+        releaseDbConn(db)
 
-    get "/api/counterparts/company/@companyId":
-      let companyId = parseInt(@"companyId")
-      let db = openDb()
-      try:
-        var counterparts: seq[Counterpart] = @[]
-        db.select(counterparts, "\"companyId\" = $1 ORDER BY name", companyId)
-        resp Http200, {"Content-Type": "application/json"}, $toJsonArray(counterparts)
-      finally:
-        close(db)
-
+    # Logic from baraba.nim, adapted for pool
     post "/api/counterparts":
       let body = parseJson(request.body)
-      let db = openDb()
+      let db = getDbConn()
       try:
         var counterpart = newCounterpart(
           name = body["name"].getStr(),
           eik = body.getOrDefault("eik").getStr(""),
-          vatNumber = body.getOrDefault("vatNumber").getStr(""),
-          address = body.getOrDefault("address").getStr(""),
-          city = body.getOrDefault("city").getStr(""),
-          country = body.getOrDefault("country").getStr("BG"),
-          counterpartType = body.getOrDefault("counterpartType").getStr("OTHER"),
-          isCustomer = body.getOrDefault("isCustomer").getBool(false),
-          isSupplier = body.getOrDefault("isSupplier").getBool(false),
-          isVatRegistered = body.getOrDefault("isVatRegistered").getBool(false),
-          companyId = body["companyId"].getBiggestInt()
+          company_id = body["companyId"].getBiggestInt()
         )
-
         db.insert(counterpart)
         resp Http201, {"Content-Type": "application/json"}, $toJson(counterpart)
       except:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{
-          "error": "Грешка при създаване: " & getCurrentExceptionMsg()
-        })
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
       finally:
-        close(db)
+        releaseDbConn(db)
 
+    # Logic from original counterpart_routes.nim, adapted for pool
     put "/api/counterparts/@id":
       let counterpartId = parseInt(@"id")
       let body = parseJson(request.body)
-      let db = openDb()
+      let db = getDbConn()
       try:
         var counterpart = newCounterpart()
         db.select(counterpart, "id = $1", counterpartId)
 
         if body.hasKey("name"): counterpart.name = body["name"].getStr()
-        if body.hasKey("eik"): counterpart.eik = body["eik"].getStr()
-        if body.hasKey("vatNumber"): counterpart.vatNumber = body["vatNumber"].getStr()
-        if body.hasKey("address"): counterpart.address = body["address"].getStr()
-        if body.hasKey("city"): counterpart.city = body["city"].getStr()
-        if body.hasKey("isCustomer"): counterpart.isCustomer = body["isCustomer"].getBool()
-        if body.hasKey("isSupplier"): counterpart.isSupplier = body["isSupplier"].getBool()
-        if body.hasKey("isActive"): counterpart.isActive = body["isActive"].getBool()
-        counterpart.updatedAt = now()
+        if body.hasKey("eik"): counterpart.eik = body.getOrDefault("eik").getStr(counterpart.eik)
+        
+        # The model in baraba.nim is simpler. Sticking to that.
+        # if body.hasKey("vat_number"): counterpart.vat_number = body.getOrDefault("vat_number").getStr(counterpart.vat_number)
+        # if body.hasKey("address"): counterpart.address = body.getOrDefault("address").getStr(counterpart.address)
+        # if body.hasKey("city"): counterpart.city = body.getOrDefault("city").getStr(counterpart.city)
+        
+        counterpart.updated_at = now()
 
         db.update(counterpart)
         resp Http200, {"Content-Type": "application/json"}, $toJson(counterpart)
       except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{
-          "error": "Контрагентът не е намерен"
-        })
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Контрагентът не е намерен"})
       finally:
-        close(db)
+        releaseDbConn(db)
 
+    # Logic from original counterpart_routes.nim, adapted for pool
     delete "/api/counterparts/@id":
       let counterpartId = parseInt(@"id")
-      let db = openDb()
+      let db = getDbConn()
       try:
         var counterpart = newCounterpart()
         db.select(counterpart, "id = $1", counterpartId)
         db.delete(counterpart)
         resp Http200, {"Content-Type": "application/json"}, $(%*{
-          "success": true
+          "success": true,
+          "message": "Контрагентът е изтрит"
         })
       except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{
-          "error": "Контрагентът не е намерен"
-        })
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Контрагентът не е намерен"})
       finally:
-        close(db)
+        releaseDbConn(db)
 
   return counterpartRouter

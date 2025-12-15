@@ -10,28 +10,29 @@ import services/auth
 import db/config
 import utils/json_utils
 
-const corsHeaders = @{"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization"}
-
-template addCors() =
-  for (k, v) in corsHeaders:
-    response.headers[k] = v
+const corsHeaders* = @{
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization"
+}
 
 router mainRouter:
-  # CORS preflight for all routes
-  options "/api/auth/login":
-    resp Http200, corsHeaders, ""
-  options "/api/auth/register":
-    resp Http200, corsHeaders, ""
-  options "/api/companies":
-    resp Http200, corsHeaders, ""
-  options "/api/accounts":
-    resp Http200, corsHeaders, ""
-  options "/api/counterparts":
-    resp Http200, corsHeaders, ""
-  options "/api/journal-entries":
-    resp Http200, corsHeaders, ""
+  # =====================
+  # CORS preflight
+  # =====================
+  options "/api/auth/login": resp Http200, corsHeaders, ""
+  options "/api/auth/register": resp Http200, corsHeaders, ""
+  options "/api/auth/me": resp Http200, corsHeaders, ""
+  options "/api/companies": resp Http200, corsHeaders, ""
+  options "/api/companies/@id": resp Http200, corsHeaders, ""
+  options "/api/accounts": resp Http200, corsHeaders, ""
+  options "/api/accounts/company/@companyId": resp Http200, corsHeaders, ""
+  options "/api/counterparts": resp Http200, corsHeaders, ""
+  options "/api/journal-entries": resp Http200, corsHeaders, ""
 
+  # =====================
   # Health check
+  # =====================
   get "/":
     resp Http200, {"Content-Type": "application/json"}, $(%*{
       "name": "Baraba API",
@@ -42,12 +43,18 @@ router mainRouter:
   get "/health":
     resp Http200, {"Content-Type": "application/json"}, $(%*{"status": "ok"})
 
-  # === AUTH ROUTES ===
+  # =====================
+  # AUTH ROUTES
+  # =====================
   post "/api/auth/login":
     let body = parseJson(request.body)
     let username = body["username"].getStr()
     let password = body["password"].getStr()
-    let userOpt = authenticateUser(username, password)
+
+    let db = getDbConn()
+    let userOpt = authenticateUser(db, username, password)
+    releaseDbConn(db)
+
     if userOpt.isSome:
       let user = userOpt.get
       let token = generateToken(user.id, user.username)
@@ -64,8 +71,10 @@ router mainRouter:
     let email = body["email"].getStr()
     let password = body["password"].getStr()
     let groupId = body.getOrDefault("groupId").getBiggestInt(2)
+
+    let db = getDbConn()
     try:
-      let user = createUser(username, email, password, groupId)
+      let user = createUser(db, username, email, password, groupId)
       let token = generateToken(user.id, user.username)
       resp Http201, {"Content-Type": "application/json"}, $(%*{
         "token": token,
@@ -73,10 +82,36 @@ router mainRouter:
       })
     except:
       resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
 
-  # === COMPANY ROUTES ===
+  get "/api/auth/me":
+    let authHeader = request.headers.getOrDefault("Authorization")
+    if authHeader.len == 0 or not authHeader.startsWith("Bearer "):
+      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Липсва токен"})
+
+    let token = authHeader[7..^1]
+    let (valid, userId, _) = verifyToken(token)
+    if not valid:
+      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалиден токен"})
+
+    let db = getDbConn()
+    let userOpt = getUserById(db, userId)
+    releaseDbConn(db)
+
+    if userOpt.isSome:
+      let user = userOpt.get
+      resp Http200, {"Content-Type": "application/json"}, $(%*{
+        "id": user.id, "username": user.username, "email": user.email
+      })
+    else:
+      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Потребителят не е намерен"})
+
+  # =====================
+  # COMPANY ROUTES
+  # =====================
   get "/api/companies":
-    let db = openDb()
+    let db = getDbConn()
     try:
       var companies = @[newCompany()]
       db.selectAll(companies)
@@ -84,11 +119,11 @@ router mainRouter:
         companies = @[]
       resp Http200, {"Content-Type": "application/json"}, $toJsonArray(companies)
     finally:
-      close(db)
+      releaseDbConn(db)
 
   get "/api/companies/@id":
     let companyId = parseInt(@"id")
-    let db = openDb()
+    let db = getDbConn()
     try:
       var company = newCompany()
       db.select(company, "id = $1", companyId)
@@ -96,11 +131,11 @@ router mainRouter:
     except:
       resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
     finally:
-      close(db)
+      releaseDbConn(db)
 
   post "/api/companies":
     let body = parseJson(request.body)
-    let db = openDb()
+    let db = getDbConn()
     try:
       var baseCurrencyId: int64 = 0
       var currencies = @[newCurrency()]
@@ -120,12 +155,46 @@ router mainRouter:
     except:
       resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
     finally:
-      close(db)
+      releaseDbConn(db)
 
-  # === ACCOUNT ROUTES ===
+  put "/api/companies/@id":
+    let companyId = parseInt(@"id")
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var company = newCompany()
+      db.select(company, "id = $1", companyId)
+      if body.hasKey("name"): company.name = body["name"].getStr()
+      if body.hasKey("vatNumber"): company.vat_number = body["vatNumber"].getStr()
+      if body.hasKey("address"): company.address = body["address"].getStr()
+      if body.hasKey("city"): company.city = body["city"].getStr()
+      company.updated_at = now()
+      db.update(company)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+    except:
+      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+    finally:
+      releaseDbConn(db)
+
+  delete "/api/companies/@id":
+    let companyId = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      var company = newCompany()
+      db.select(company, "id = $1", companyId)
+      db.delete(company)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+    except:
+      resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+    finally:
+      releaseDbConn(db)
+
+  # =====================
+  # ACCOUNT ROUTES
+  # =====================
   get "/api/accounts":
     let companyId = request.params.getOrDefault("companyId", "0")
-    let db = openDb()
+    let db = getDbConn()
     try:
       var accounts = @[newAccount()]
       if companyId != "0":
@@ -136,11 +205,11 @@ router mainRouter:
         accounts = @[]
       resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
     finally:
-      close(db)
+      releaseDbConn(db)
 
   get "/api/accounts/company/@companyId":
     let companyId = parseInt(@"companyId")
-    let db = openDb()
+    let db = getDbConn()
     try:
       var accounts = @[newAccount()]
       db.select(accounts, "company_id = $1 ORDER BY code", companyId)
@@ -148,11 +217,11 @@ router mainRouter:
         accounts = @[]
       resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
     finally:
-      close(db)
+      releaseDbConn(db)
 
   post "/api/accounts":
     let body = parseJson(request.body)
-    let db = openDb()
+    let db = getDbConn()
     try:
       var parentId = none(int64)
       if body.hasKey("parentId") and body["parentId"].kind != JNull:
@@ -169,12 +238,14 @@ router mainRouter:
     except:
       resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
     finally:
-      close(db)
+      releaseDbConn(db)
 
-  # === COUNTERPART ROUTES ===
+  # =====================
+  # COUNTERPART ROUTES
+  # =====================
   get "/api/counterparts":
     let companyId = request.params.getOrDefault("companyId", "0")
-    let db = openDb()
+    let db = getDbConn()
     try:
       var counterparts = @[newCounterpart()]
       if companyId != "0":
@@ -185,11 +256,11 @@ router mainRouter:
         counterparts = @[]
       resp Http200, {"Content-Type": "application/json"}, $toJsonArray(counterparts)
     finally:
-      close(db)
+      releaseDbConn(db)
 
   post "/api/counterparts":
     let body = parseJson(request.body)
-    let db = openDb()
+    let db = getDbConn()
     try:
       var counterpart = newCounterpart(
         name = body["name"].getStr(),
@@ -201,12 +272,14 @@ router mainRouter:
     except:
       resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
     finally:
-      close(db)
+      releaseDbConn(db)
 
-  # === JOURNAL ENTRY ROUTES ===
+  # =====================
+  # JOURNAL ROUTES
+  # =====================
   get "/api/journal-entries":
     let companyId = request.params.getOrDefault("companyId", "0")
-    let db = openDb()
+    let db = getDbConn()
     try:
       var entries = @[newJournalEntry()]
       if companyId != "0":
@@ -217,11 +290,11 @@ router mainRouter:
         entries = @[]
       resp Http200, {"Content-Type": "application/json"}, $toJsonArray(entries)
     finally:
-      close(db)
+      releaseDbConn(db)
 
   post "/api/journal-entries":
     let body = parseJson(request.body)
-    let db = openDb()
+    let db = getDbConn()
     try:
       var entry = newJournalEntry(
         document_number = body.getOrDefault("documentNumber").getStr(""),
@@ -235,10 +308,13 @@ router mainRouter:
     except:
       resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
     finally:
-      close(db)
+      releaseDbConn(db)
 
 proc main() =
   echo "Starting Baraba API server..."
+  initDbPool()
+  defer: closeDbPool()
+
   echo "http://localhost:5000"
   let settings = newSettings(port = Port(5000))
   var jester = initJester(mainRouter, settings = settings)
