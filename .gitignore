@@ -1,6 +1,9 @@
 # Old Java project
 old/
 
+# Blog
+BLOG/
+
 # Nim build artifacts
 src/baraba
 src/db/migrate

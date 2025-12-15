@@ -5,6 +5,7 @@ import type { Company } from '../types';
 interface CompanyContextType {
   currentCompany: Company | null;
   setCurrentCompany: (company: Company | null) => void;
+  companyId: number | null;
 }
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
@@ -25,7 +26,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <CompanyContext.Provider value={{ currentCompany, setCurrentCompany: handleSetCompany }}>
+    <CompanyContext.Provider value={{ currentCompany, setCurrentCompany: handleSetCompany, companyId: currentCompany?.id ?? null }}>
       {children}
     </CompanyContext.Provider>
   );

@@ -19,21 +19,9 @@ interface AuditLog {
   createdAt: string;
 }
 
-interface AuditLogsPageData {
-  auditLogs: {
-    logs: AuditLog[];
-    totalCount: number;
-    hasMore: boolean;
-  };
-}
-
 interface AuditLogStat {
   action: string;
   count: number;
-}
-
-interface AuditLogStatsData {
-  auditLogStats: AuditLogStat[];
 }
 
 const PAGE_SIZE = 50;
@@ -88,7 +76,7 @@ export default function AuditLogs() {
     setLoading(true);
     try {
       const data = await auditLogsApi.getAuditLogs({
-        companyId,
+        companyId: companyId ?? undefined,
         offset: currentOffset,
         limit: PAGE_SIZE,
         fromDate,
@@ -180,7 +168,7 @@ export default function AuditLogs() {
     setActionFilter('');
   };
 
-  const stats = statsData?.auditLogStats || [];
+  // stats is already defined as state above
 
   return (
     <div className="space-y-6">

@@ -1,32 +1,57 @@
-import std/json
-import std/asyncfutures
+import std/[json, times, options, strutils]
+import jester
+import norm/postgres
+
 import ../db/config
 import ../models/vatrate
+import ../utils/json_utils
 
-proc getVatRates*(companyId: int): Future[string] {.async.} =
-  let db = await openDb()
-  let rates = await db.getAll(VatRate, "company_id = $1", companyId)
-  return $toJson(rates)
+proc vatRateRoutes*(): auto =
+  router vatRateRouter:
+    get "/api/vat-rates":
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
+      let db = getDbConn()
+      try:
+        var rates = @[newVatRate()]
+        if companyId > 0:
+          db.select(rates, "company_id = $1", companyId)
+        else:
+          db.selectAll(rates)
+        if rates.len == 1 and rates[0].id == 0:
+          rates = @[]
+        resp Http200, {"Content-Type": "application/json"}, $toJsonArray(rates)
+      finally:
+        releaseDbConn(db)
 
-proc createVatRate*(companyId: int, code: string, name: string, rate: float, effectiveFrom: string, isDefault: bool): Future[string] {.async.} =
-  let db = await openDb()
-  # The old component has isDefault, but the model does not. I will ignore it for now.
-  var vatRate = newVatRate(
-    company_id = companyId,
-    code = code,
-    name = name,
-    rate = rate,
-  )
-  # The old component has effectiveFrom, but the model has valid_from: Option[DateTime]
-  # I will parse the string and set it.
-  vatRate.valid_from = some(parse(effectiveFrom, "yyyy-MM-dd"))
-  
-  await db.insert(vatRate)
-  return $toJson(vatRate)
+    post "/api/vat-rates":
+      let body = parseJson(request.body)
+      let db = getDbConn()
+      try:
+        var vatRate = newVatRate(
+          company_id = body["companyId"].getInt().int64,
+          code = body["code"].getStr(),
+          name = body["name"].getStr(),
+          rate = body["rate"].getFloat()
+        )
+        if body.hasKey("effectiveFrom"):
+          vatRate.valid_from = some(parse(body["effectiveFrom"].getStr(), "yyyy-MM-dd"))
+        db.insert(vatRate)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(vatRate)
+      finally:
+        releaseDbConn(db)
 
-proc deleteVatRate*(id: int): Future[string] {.async.} =
-  let db = await openDb()
-  var vatRate = newVatRate()
-  await db.select(vatRate, "id = $1", id)
-  await db.delete(vatRate)
-  return %*{"success": true}
+    delete "/api/vat-rates/@id":
+      let id = parseInt(@"id")
+      let db = getDbConn()
+      try:
+        var vatRate = newVatRate()
+        db.select(vatRate, "id = $1", id)
+        if vatRate.id == 0:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "VAT rate not found"}"""
+        else:
+          db.delete(vatRate)
+          resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+      finally:
+        releaseDbConn(db)
+
+  return vatRateRouter

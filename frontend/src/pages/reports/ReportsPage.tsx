@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { reportsApi } from '../../api/reports';
 import { accountsApi } from '../../api/accounts';
 import { useCompany } from '../../contexts/CompanyContext';
-import { Account } from '../../types';
+import type { Account } from '../../types';
 
 type ReportType = 'turnover' | 'generalLedger';
 
@@ -98,7 +98,6 @@ export default function Reports() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [showZeroBalances, setShowZeroBalances] = useState(false);
   const [accountCodeDepth, setAccountCodeDepth] = useState<number | null>(null);
-  const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [reportData, setReportData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -158,18 +157,6 @@ export default function Reports() {
   const formatAmount = (amount: number | string) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     return num.toLocaleString('bg-BG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const toggleAccountExpand = (accountId: number) => {
-    setExpandedAccounts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(accountId)) {
-        newSet.delete(accountId);
-      } else {
-        newSet.add(accountId);
-      }
-      return newSet;
-    });
   };
 
   // Render report content based on selected type

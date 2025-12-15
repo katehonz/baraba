@@ -50,29 +50,31 @@ proc closeDbPool*() =
   pool.initialized = false
   echo "Database pool closed"
 
-proc getDbConn*(): DbConn =
+proc getDbConn*(): DbConn {.gcsafe.} =
   ## Borrows a connection from the pool
-  if not pool.initialized:
-    raise newException(DbError, "Database pool not initialized")
+  {.cast(gcsafe).}:
+    if not pool.initialized:
+      raise newException(DbError, "Database pool not initialized")
 
-  withLock pool.lock:
-    if pool.connections.len == 0:
-      # Pool exhausted, create a new connection
-      return createConnection()
-    result = pool.connections.pop()
+    withLock pool.lock:
+      if pool.connections.len == 0:
+        # Pool exhausted, create a new connection
+        return createConnection()
+      result = pool.connections.pop()
 
-proc releaseDbConn*(conn: DbConn) =
+proc releaseDbConn*(conn: DbConn) {.gcsafe.} =
   ## Returns a connection to the pool
-  if not pool.initialized:
-    conn.close()
-    return
-
-  withLock pool.lock:
-    if pool.connections.len < PoolSize:
-      pool.connections.add(conn)
-    else:
-      # Pool is full, close the connection
+  {.cast(gcsafe).}:
+    if not pool.initialized:
       conn.close()
+      return
+
+    withLock pool.lock:
+      if pool.connections.len < PoolSize:
+        pool.connections.add(conn)
+      else:
+        # Pool is full, close the connection
+        conn.close()
 
 template withDb*(body: untyped) =
   ## Convenience template - borrows connection, executes body, releases connection

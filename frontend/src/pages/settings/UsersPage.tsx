@@ -21,6 +21,9 @@ export default function Users() {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [creating, _setCreating] = useState(false);
+  const [updating, _setUpdating] = useState(false);
+  const [resetting, _setResetting] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,8 +68,8 @@ export default function Users() {
       username: user.username,
       email: user.email,
       password: '',
-      firstName: user.firstName,
-      lastName: user.lastName,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
       groupId: user.groupId?.toString() || '',
       isActive: user.isActive,
     });
@@ -230,7 +233,7 @@ export default function Users() {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                      {user.firstName.charAt(0)}{user.lastName.charAt(0)}
+                      {(user.firstName || 'U').charAt(0)}{(user.lastName || '').charAt(0)}
                     </div>
                     <div className="ml-3">
                       <div className="text-sm font-medium text-gray-900">{user.username}</div>
@@ -245,7 +248,7 @@ export default function Users() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                    {user.group?.name || 'Без група'}
+                    {groups.find(g => g.id === user.groupId)?.name || 'Без група'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">

@@ -1,21 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { reportsApi } from '../../api/reports';
 import { accountsApi } from '../../api/accounts';
 import { counterpartsApi } from '../../api/counterparts';
 import { useCompany } from '../../contexts/CompanyContext';
-import { Account, Counterpart } from '../../types';
-
-interface TransactionEntry {
-  date: string;
-  entryNumber: string;
-  documentNumber: string;
-  description: string;
-  accountCode: string;
-  accountName: string;
-  debitAmount: number;
-  creditAmount: number;
-  counterpartName: string;
-}
+import type { Account, Counterpart } from '../../types';
 
 interface CounterpartBalance {
   name: string;

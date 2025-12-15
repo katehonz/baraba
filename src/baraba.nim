@@ -5,7 +5,7 @@ import std/[json, strutils, options, times, math]
 import jester
 import norm/postgres
 
-import models/[user, company, account, counterpart, journal, currency]
+import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category]
 import services/auth
 import db/config
 import utils/json_utils
@@ -22,7 +22,7 @@ import routes/user_group_routes
 import routes/fixed_asset_category_routes
 import routes/vies_routes
 
-var graphqlCtx: GraphqlRef
+var graphqlCtx {.threadvar.}: GraphqlRef
 
 const corsHeaders* = @{
   "Access-Control-Allow-Origin": "*",
@@ -294,7 +294,7 @@ router mainRouter:
           if body[field].kind == JNull or body[field].getInt() == 0:
             company.setAccountId(field, none(int64))
           else:
-            company.setAccountId(field, some(body[field].getInt()))
+            company.setAccountId(field, some(body[field].getInt().int64))
       
       company.updated_at = now()
       db.update(company)
@@ -438,26 +438,50 @@ router mainRouter:
   # CURRENCY ROUTES
   # =====================
   get "/api/currencies":
-    let result = await getCurrencies()
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var currencies = @[newCurrency()]
+      db.selectAll(currencies)
+      if currencies.len == 1 and currencies[0].id == 0:
+        currencies = @[]
+      resp Http200, jsonCors, $toJsonArray(currencies)
+    finally:
+      releaseDbConn(db)
 
   post "/api/currencies":
     let body = parseJson(request.body)
-    let code = body["code"].getStr()
-    let name = body["name"].getStr()
-    let nameBg = body["nameBg"].getStr()
-    let symbol = body["symbol"].getStr()
-    let decimalPlaces = body["decimalPlaces"].getInt()
-    let isBaseCurrency = body["isBaseCurrency"].getBool()
-    let result = await createCurrency(code, name, nameBg, symbol, decimalPlaces, isBaseCurrency)
-    resp Http201, jsonCors, result
-  
+    let db = getDbConn()
+    try:
+      var currency = newCurrency(
+        code = body["code"].getStr(),
+        name = body["name"].getStr(),
+        name_bg = body.getOrDefault("nameBg").getStr(""),
+        symbol = body.getOrDefault("symbol").getStr(""),
+        decimal_places = body.getOrDefault("decimalPlaces").getInt(2),
+        is_base_currency = body.getOrDefault("isBaseCurrency").getBool(false),
+        is_active = true
+      )
+      db.insert(currency)
+      resp Http201, jsonCors, $toJson(currency)
+    finally:
+      releaseDbConn(db)
+
   put "/api/currencies/@id":
     let id = parseInt(@"id")
     let body = parseJson(request.body)
-    let isActive = body["isActive"].getBool()
-    let result = await updateCurrency(id, isActive)
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var currency = newCurrency()
+      db.select(currency, "id = $1", id)
+      if currency.id == 0:
+        resp Http404, jsonCors, """{"error": "Currency not found"}"""
+      else:
+        if body.hasKey("isActive"):
+          currency.is_active = body["isActive"].getBool()
+        db.update(currency)
+        resp Http200, jsonCors, $toJson(currency)
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # AUDIT LOG ROUTES
@@ -470,14 +494,14 @@ router mainRouter:
     let action = request.params.getOrDefault("action", "")
     let offset = request.params.getOrDefault("offset", "0").parseInt
     let limit = request.params.getOrDefault("limit", "50").parseInt
-    let result = await getAuditLogs(companyId, fromDate, toDate, search, action, offset, limit)
-    resp Http200, jsonCors, result
+    let logsResult = getAuditLogs(companyId, fromDate, toDate, search, action, offset, limit)
+    resp Http200, jsonCors, logsResult
 
   get "/api/audit-log-stats":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
     let days = request.params.getOrDefault("days", "30").parseInt
-    let result = await getAuditLogStats(companyId, days)
-    resp Http200, jsonCors, result
+    let statsResult = getAuditLogStats(companyId, days)
+    resp Http200, jsonCors, statsResult
 
   get "/api/monthly-stats":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
@@ -485,101 +509,204 @@ router mainRouter:
     let fromMonth = request.params.getOrDefault("fromMonth", "0").parseInt
     let toYear = request.params.getOrDefault("toYear", "0").parseInt
     let toMonth = request.params.getOrDefault("toMonth", "0").parseInt
-    let result = await getMonthlyTransactionStats(companyId, fromYear, fromMonth, toYear, toMonth)
-    resp Http200, jsonCors, result
+    let monthlyResult = getMonthlyTransactionStats(companyId, fromYear, fromMonth, toYear, toMonth)
+    resp Http200, jsonCors, monthlyResult
 
   # =====================
   # EXCHANGE RATE ROUTES
   # =====================
   get "/api/exchange-rates":
-    let result = await getExchangeRates()
-    resp Http200, jsonCors, result
-  
+    let db = getDbConn()
+    try:
+      var rates = @[newExchangeRate()]
+      db.selectAll(rates)
+      if rates.len == 1 and rates[0].id == 0:
+        rates = @[]
+      resp Http200, jsonCors, $toJsonArray(rates)
+    finally:
+      releaseDbConn(db)
+
   post "/api/exchange-rates/fetch-ecb":
-    let result = await fetchEcbRates()
-    resp Http200, jsonCors, result
+    resp Http200, jsonCors, """{"message": "ECB rates fetching not implemented yet"}"""
 
   # =====================
   # VAT RATE ROUTES
   # =====================
   get "/api/vat-rates":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let result = await getVatRates(companyId)
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var rates = @[newVatRate()]
+      if companyId > 0:
+        db.select(rates, "company_id = $1", companyId)
+      else:
+        db.selectAll(rates)
+      if rates.len == 1 and rates[0].id == 0:
+        rates = @[]
+      resp Http200, jsonCors, $toJsonArray(rates)
+    finally:
+      releaseDbConn(db)
 
   post "/api/vat-rates":
     let body = parseJson(request.body)
-    let companyId = body["companyId"].getInt()
-    let code = body["code"].getStr()
-    let name = body["name"].getStr()
-    let rate = body["rate"].getFloat()
-    let effectiveFrom = body["effectiveFrom"].getStr()
-    let isDefault = body["isDefault"].getBool()
-    let result = await createVatRate(companyId, code, name, rate, effectiveFrom, isDefault)
-    resp Http201, jsonCors, result
-  
+    let db = getDbConn()
+    try:
+      var vatRate = newVatRate(
+        company_id = body["companyId"].getInt().int64,
+        code = body["code"].getStr(),
+        name = body["name"].getStr(),
+        rate = body["rate"].getFloat()
+      )
+      if body.hasKey("effectiveFrom"):
+        vatRate.valid_from = some(parse(body["effectiveFrom"].getStr(), "yyyy-MM-dd"))
+      db.insert(vatRate)
+      resp Http201, jsonCors, $toJson(vatRate)
+    finally:
+      releaseDbConn(db)
+
   delete "/api/vat-rates/@id":
     let id = parseInt(@"id")
-    let result = await deleteVatRate(id)
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var vatRate = newVatRate()
+      db.select(vatRate, "id = $1", id)
+      if vatRate.id == 0:
+        resp Http404, jsonCors, """{"error": "VAT rate not found"}"""
+      else:
+        db.delete(vatRate)
+        resp Http200, jsonCors, """{"success": true}"""
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # USER ROUTES
   # =====================
   get "/api/users":
-    let result = await getUsers()
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var users = @[newUser()]
+      db.selectAll(users)
+      if users.len == 1 and users[0].id == 0:
+        users = @[]
+      var usersJson = newJArray()
+      for user in users:
+        usersJson.add(%*{
+          "id": user.id,
+          "username": user.username,
+          "email": user.email,
+          "firstName": user.first_name,
+          "lastName": user.last_name,
+          "isActive": user.is_active,
+          "groupId": user.group_id
+        })
+      resp Http200, jsonCors, $usersJson
+    finally:
+      releaseDbConn(db)
 
   post "/api/users":
     let body = parseJson(request.body)
-    let username = body["username"].getStr()
-    let email = body["email"].getStr()
-    let password = body["password"].getStr()
-    let firstName = body["firstName"].getStr()
-    let lastName = body["lastName"].getStr()
-    let groupId = body["groupId"].getInt()
-    let isActive = body["isActive"].getBool()
-    let result = await createUser(username, email, password, firstName, lastName, groupId, isActive)
-    resp Http201, jsonCors, result
+    let db = getDbConn()
+    try:
+      let user = createUser(db,
+        body["username"].getStr(),
+        body["email"].getStr(),
+        body["password"].getStr(),
+        body.getOrDefault("groupId").getInt(0).int64
+      )
+      resp Http201, jsonCors, $toJson(user)
+    finally:
+      releaseDbConn(db)
 
   put "/api/users/@id":
     let id = parseInt(@"id")
     let body = parseJson(request.body)
-    let username = body["username"].getStr()
-    let email = body["email"].getStr()
-    let firstName = body["firstName"].getStr()
-    let lastName = body["lastName"].getStr()
-    let groupId = body["groupId"].getInt()
-    let isActive = body["isActive"].getBool()
-    let result = await updateUser(id, username, email, firstName, lastName, groupId, isActive)
-    resp Http200, jsonCors, result
-  
+    let db = getDbConn()
+    try:
+      var user = newUser()
+      db.select(user, "id = $1", id)
+      if user.id == 0:
+        resp Http404, jsonCors, """{"error": "User not found"}"""
+      else:
+        if body.hasKey("username"):
+          user.username = body["username"].getStr()
+        if body.hasKey("email"):
+          user.email = body["email"].getStr()
+        if body.hasKey("firstName"):
+          user.first_name = body["firstName"].getStr()
+        if body.hasKey("lastName"):
+          user.last_name = body["lastName"].getStr()
+        if body.hasKey("groupId"):
+          user.group_id = body["groupId"].getInt().int64
+        if body.hasKey("isActive"):
+          user.is_active = body["isActive"].getBool()
+        db.update(user)
+        resp Http200, jsonCors, $toJson(user)
+    finally:
+      releaseDbConn(db)
+
   delete "/api/users/@id":
     let id = parseInt(@"id")
-    let result = await deleteUser(id)
-    resp Http200, jsonCors, result
-  
+    let db = getDbConn()
+    try:
+      var user = newUser()
+      db.select(user, "id = $1", id)
+      if user.id == 0:
+        resp Http404, jsonCors, """{"error": "User not found"}"""
+      else:
+        db.delete(user)
+        resp Http200, jsonCors, """{"success": true}"""
+    finally:
+      releaseDbConn(db)
+
   post "/api/users/@id/reset-password":
     let id = parseInt(@"id")
     let body = parseJson(request.body)
-    let newPassword = body["newPassword"].getStr()
-    let result = await resetUserPassword(id, newPassword)
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var user = newUser()
+      db.select(user, "id = $1", id)
+      if user.id == 0:
+        resp Http404, jsonCors, """{"error": "User not found"}"""
+      else:
+        let newSalt = $epochTime()
+        user.password = hashPassword(body["newPassword"].getStr(), newSalt)
+        user.salt = newSalt
+        db.update(user)
+        resp Http200, jsonCors, """{"success": true}"""
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # USER GROUP ROUTES
   # =====================
   get "/api/user-groups":
-    let result = await getUserGroups()
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var groups = @[newUserGroup()]
+      db.selectAll(groups)
+      if groups.len == 1 and groups[0].id == 0:
+        groups = @[]
+      resp Http200, jsonCors, $toJsonArray(groups)
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # FIXED ASSET CATEGORY ROUTES
   # =====================
   get "/api/fixed-asset-categories":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let result = await getFixedAssetCategories(companyId)
-    resp Http200, jsonCors, result
+    let db = getDbConn()
+    try:
+      var categories = @[newFixedAssetCategory()]
+      if companyId > 0:
+        db.select(categories, "company_id = $1", companyId)
+      else:
+        db.selectAll(categories)
+      if categories.len == 1 and categories[0].id == 0:
+        categories = @[]
+      resp Http200, jsonCors, $toJsonArray(categories)
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # VIES ROUTES
@@ -587,8 +714,10 @@ router mainRouter:
   post "/api/validate-vat":
     let body = parseJson(request.body)
     let vatNumber = body["vatNumber"].getStr()
-    let result = await validateVat(vatNumber)
-    resp Http200, jsonCors, result
+    if vatNumber.len < 3:
+      resp Http400, jsonCors, """{"error": "VAT number too short"}"""
+    else:
+      resp Http200, jsonCors, """{"message": "VIES validation not implemented yet"}"""
 
   # =====================
   # JOURNAL ROUTES

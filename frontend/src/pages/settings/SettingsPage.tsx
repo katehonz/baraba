@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { settingsApi, DefaultAccounts } from '../../api/settings';
+import { settingsApi } from '../../api/settings';
+import type { DefaultAccounts } from '../../api/settings';
 import { accountsApi } from '../../api/accounts';
 import { currenciesApi } from '../../api/currencies';
 import { useCompany } from '../../contexts/CompanyContext';
-import { Account, Currency } from '../../types';
+import type { Account, Currency } from '../../types';
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('accounting');
@@ -12,7 +13,6 @@ export default function Settings() {
 
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [company, setCompany] = useState<any>(null);
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccounts>({});
   const [saving, setSaving] = useState(false);
 
@@ -20,8 +20,7 @@ export default function Settings() {
     currenciesApi.getAll().then(setCurrencies);
     if (companyId) {
       accountsApi.getByCompany(companyId).then(setAccounts);
-      settingsApi.getCompanySettings(companyId).then(data => {
-        setCompany(data)
+      settingsApi.getCompanySettings(companyId).then((data: any) => {
         setDefaultAccounts({
           defaultCashAccountId: data.defaultCashAccount?.id,
           defaultCustomersAccountId: data.defaultCustomersAccount?.id,
@@ -131,31 +130,40 @@ export default function Settings() {
 
         {/* Content */}
         <div className="flex-1">
-                      <div>
-                        <p className="text-sm font-medium text-green-900">{baseCurrency?.code || 'EUR'}</p>
-                        <p className="text-xs text-green-700">Фиксирана базова валута</p>
-                      </div>
-                    </div>
+          {activeTab === 'accounting' && (
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6 space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Счетоводни настройки</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Основни настройки за счетоводството
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-md">
+                  <span className="text-2xl mr-3">💱</span>
+                  <div>
+                    <p className="text-sm font-medium text-green-900">Базова валута: {baseCurrency?.code || 'EUR'}</p>
+                    <p className="text-xs text-green-700">Фиксирана базова валута</p>
                   </div>
+                </div>
 
-                  <div>
-                    <Link to="/settings/currencies" className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
-                        <span className="text-2xl mr-3">🪙</span>
-                        <div>
-                            <p className="text-sm font-medium text-blue-900">Валути и курсове</p>
-                            <p className="text-xs text-blue-700">Управление на валути и обменни курсове</p>
-                        </div>
-                    </Link>
-                  </div>
-                  <div>
-                    <Link to="/settings/vat-rates" className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
-                        <span className="text-2xl mr-3">💰</span>
-                        <div>
-                            <p className="text-sm font-medium text-blue-900">ДДС Ставки</p>
-                            <p className="text-xs text-blue-700">Управление на ставките по ЗДДС</p>
-                        </div>
-                    </Link>
-                  </div>
+                <div>
+                  <Link to="/settings/currencies" className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
+                    <span className="text-2xl mr-3">🪙</span>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Валути и курсове</p>
+                      <p className="text-xs text-blue-700">Управление на валути и обменни курсове</p>
+                    </div>
+                  </Link>
+                </div>
+                <div>
+                  <Link to="/settings/vat-rates" className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
+                    <span className="text-2xl mr-3">💰</span>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">ДДС Ставки</p>
+                      <p className="text-xs text-blue-700">Управление на ставките по ЗДДС</p>
+                    </div>
+                  </Link>
                 </div>
               </div>
             </div>

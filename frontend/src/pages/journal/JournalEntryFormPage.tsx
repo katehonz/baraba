@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCompany } from '../../contexts/CompanyContext';
 import { accountsApi } from '../../api/accounts';
@@ -6,7 +6,7 @@ import { counterpartsApi } from '../../api/counterparts';
 import { currenciesApi } from '../../api/currencies';
 import { journalApi } from '../../api/journal';
 import { viesApi } from '../../api/vies';
-import { Account, Counterpart, Currency, JournalEntry, EntryLine, CreateJournalEntryInput, CreateEntryLineInput } from '../../types';
+import type { Account, Counterpart, Currency, CreateJournalEntryInput, CreateEntryLineInput } from '../../types';
 
 const newEmptyLine = (): CreateEntryLineInput => ({
     accountId: 0,
@@ -66,7 +66,7 @@ export default function JournalEntryFormPage() {
                         documentNumber: entry.documentNumber,
                         description: entry.description,
                         companyId: entry.companyId,
-                        counterpartId: entry.counterpartId,
+                        counterpartId: entry.counterpartId ?? undefined,
                         lines: lines.map(line => ({
                             accountId: line.accountId,
                             debitAmount: line.debitAmount,

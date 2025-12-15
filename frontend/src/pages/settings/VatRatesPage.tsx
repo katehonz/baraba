@@ -13,6 +13,7 @@ export default function VatRates() {
     isDefault: false,
   });
   const [error, setError] = useState('');
+  const [creating, _setCreating] = useState(false);
   const { companyId } = useCompany();
   const [vatRates, setVatRates] = useState<VatRate[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,13 +1,26 @@
 import std/json
-import std/asyncdispatch
+import jester
+import norm/postgres
+
 import ../db/config
 import ../models/exchangerate
+import ../utils/json_utils
 
-proc getExchangeRates*(): Future[string] {.async.} =
-  let db = await openDb()
-  let rates = await db.getAll(ExchangeRate)
-  return $toJson(rates)
+proc exchangeRateRoutes*(): auto =
+  router exchangeRateRouter:
+    get "/api/exchange-rates":
+      let db = getDbConn()
+      try:
+        var rates = @[newExchangeRate()]
+        db.selectAll(rates)
+        if rates.len == 1 and rates[0].id == 0:
+          rates = @[]
+        resp Http200, {"Content-Type": "application/json"}, $toJsonArray(rates)
+      finally:
+        releaseDbConn(db)
 
-proc fetchEcbRates*(): Future[string] {.async.} =
-  # TODO: Implement ECB rates fetching
-  return %*{"message": "Not implemented yet"}
+    post "/api/exchange-rates/fetch-ecb":
+      # TODO: Implement ECB rates fetching
+      resp Http200, {"Content-Type": "application/json"}, """{"message": "ECB rates fetching not implemented yet"}"""
+
+  return exchangeRateRouter

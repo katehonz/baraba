@@ -79,6 +79,31 @@ export default function MonthlyStats() {
     );
   }, [stats]);
 
+  const handleExport = async (format: string) => {
+    if (!companyId || stats.length === 0) return;
+    setExporting(true);
+    try {
+      const blob = await monthlyStatsApi.exportStats({
+        companyId,
+        fromYear,
+        fromMonth,
+        toYear,
+        toMonth,
+        format,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `monthly-stats-${fromYear}-${fromMonth}-${toYear}-${toMonth}.${format.toLowerCase()}`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Грешка при експорт');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

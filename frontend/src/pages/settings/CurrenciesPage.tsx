@@ -12,6 +12,7 @@ export default function Currencies() {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingRates, _setLoadingRates] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -58,6 +59,16 @@ export default function Currencies() {
       fetchData();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Грешка при промяна на статус');
+    }
+  };
+
+  const handleAddCurrency = async (currency: { code: string; name: string }) => {
+    try {
+      await currenciesApi.create({ code: currency.code, name: currency.name, isActive: true });
+      fetchData();
+      setShowAddModal(false);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Грешка при добавяне на валута');
     }
   };
 

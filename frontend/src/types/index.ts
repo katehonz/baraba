@@ -123,6 +123,9 @@ export interface CreateCounterpartInput {
   counterpartType?: CounterpartType;
   isCustomer?: boolean;
   isSupplier?: boolean;
+  companyId?: number;
+}
+
 export interface FixedAssetCategory {
   id: number;
   name: string;

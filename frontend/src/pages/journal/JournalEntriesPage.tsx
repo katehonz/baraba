@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { journalApi } from '../../api/journal';
 import { useCompany } from '../../contexts/CompanyContext';
-import { JournalEntry } from '../../types';
+import type { JournalEntry } from '../../types';
 
 // Check if entry is from VAT form (has documentType like '01', '02', etc.)
 const isVatEntry = (entry: JournalEntry): boolean => {
