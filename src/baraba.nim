@@ -96,7 +96,9 @@ router mainRouter:
   options "/api/scanned-invoices": resp Http200, corsHeaders, ""
   options "/api/scanned-invoices/@id": resp Http200, corsHeaders, ""
   options "/api/scanned-invoices/@id/process": resp Http200, corsHeaders, ""
+  options "/api/vat-returns": resp Http200, corsHeaders, ""
   options "/graphql": resp Http200, corsHeaders, ""
+  options "/*": resp Http200, corsHeaders, ""
 
   # =====================
   # Health check
@@ -849,6 +851,23 @@ router mainRouter:
       resp Http400, jsonCors, """{"error": "VAT number too short"}"""
     else:
       resp Http200, jsonCors, """{"message": "VIES validation not implemented yet"}"""
+
+  # =====================
+  # VAT RETURNS ROUTES
+  # =====================
+  get "/api/vat-returns":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    if companyId == 0:
+      resp Http400, jsonCors, $(%*{"error": "Missing companyId"})
+    else:
+      let db = getDbConn()
+      try:
+        # This is a placeholder. In a real application, you would fetch data
+        # from the database based on the companyId.
+        let data = %*{"companyId": companyId, "returns": []}
+        resp Http200, jsonCors, $data
+      finally:
+        releaseDbConn(db)
 
   # =====================
   # SCANNER ROUTES
@@ -1827,8 +1846,7 @@ proc main() =
     echo "GraphQL ready at /graphql"
 
   echo "http://localhost:", port
-  # Use httpbeast with 1 thread - for multi-core scaling, run multiple instances
-  # behind Caddy/nginx load balancer
+  # Test with single thread to verify functionality
   let settings = newSettings(port = Port(port), numThreads = 1)
   var jester = initJester(mainRouter, settings = settings)
   jester.serve()

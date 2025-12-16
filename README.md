@@ -512,6 +512,12 @@ server {
 - [ ] Multi-currency операции
 - [ ] Банкови извлечения
 
+## Разработчик
+
+**Димитър Гигов**
+- Уебсайт: https://cyberbuch.org
+- Email: info@rustac.top
+
 ## Лиценз
 
 MIT

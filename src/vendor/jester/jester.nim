@@ -85,9 +85,9 @@ type
 
 const jesterVer = "0.6.0"
 
-# Global shared storage for multi-threaded httpbeast
-# Using shared memory that all threads can access
-var gJesterShared {.global.}: ptr Jester
+# Thread-safe storage for multi-threaded httpbeast
+# Each thread gets its own copy of the Jester instance
+var gJesterInstance {.threadvar.}: Jester
 
 proc toStr(headers: Option[RawHeaders]): string =
   return $newHttpHeaders(headers.get(@({:})))
@@ -528,17 +528,15 @@ proc serve*(
       logging.info("Jester is making jokes at http://0.0.0.0:$1$2" %
                    [$self.settings.port, self.settings.appName])
 
-  # For multi-threading: store Jester in global shared variable
-  # All threads access the same Jester instance (read-only after init)
-  gJesterShared = addr self
-
   when useHttpBeast:
+    # For multi-threading: create closure that captures Jester instance
+    # This ensures each thread gets its own copy of the Jester instance
+    let jesterCopy = self
+    
     run(
       proc (req: httpbeast.Request): Future[void] {.gcsafe.} =
         {.cast(gcsafe).}:
-          if gJesterShared.isNil:
-            return newFuture[void]("jester.notinit")
-          result = handleRequest(gJesterShared[], req),
+          result = handleRequest(jesterCopy, req),
       httpbeast.initSettings(self.settings.port, self.settings.bindAddr, self.settings.numThreads)
     )
   else:
