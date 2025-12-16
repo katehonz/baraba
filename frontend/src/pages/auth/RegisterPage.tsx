@@ -18,6 +18,7 @@ import {
   useColorMode,
 } from '@chakra-ui/react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const SunIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -32,6 +33,7 @@ const MoonIcon = () => (
 );
 
 export default function RegisterPage() {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +55,7 @@ export default function RegisterPage() {
     setError('');
 
     if (password !== confirmPassword) {
-      setError('Паролите не съвпадат');
+      setError(t('errors.passwords_mismatch'));
       return;
     }
 
@@ -63,7 +65,7 @@ export default function RegisterPage() {
       await register(username, email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Грешка при регистрация');
+      setError(err.response?.data?.error || t('errors.registration_failed'));
     } finally {
       setIsLoading(false);
     }
@@ -93,8 +95,8 @@ export default function RegisterPage() {
       >
         <VStack spacing={6}>
           <VStack spacing={1}>
-            <Heading size="xl" color="brand.500">Baraba</Heading>
-            <Text color="gray.500">Регистрация</Text>
+            <Heading size="xl" color="brand.500">{t('register.title')}</Heading>
+            <Text color="gray.500">{t('app.subtitle')}</Text>
           </VStack>
 
           {error && (
@@ -107,7 +109,7 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} style={{ width: '100%' }}>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Потребителско име</FormLabel>
+                <FormLabel>{t('register.username')}</FormLabel>
                 <Input
                   type="text"
                   value={username}
@@ -117,7 +119,7 @@ export default function RegisterPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{t('register.email')}</FormLabel>
                 <Input
                   type="email"
                   value={email}
@@ -126,7 +128,7 @@ export default function RegisterPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Парола</FormLabel>
+                <FormLabel>{t('register.password')}</FormLabel>
                 <Input
                   type="password"
                   value={password}
@@ -136,7 +138,7 @@ export default function RegisterPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Потвърди парола</FormLabel>
+                <FormLabel>{t('register.confirm_password')}</FormLabel>
                 <Input
                   type="password"
                   value={confirmPassword}
@@ -150,17 +152,17 @@ export default function RegisterPage() {
                 size="lg"
                 w="full"
                 isLoading={isLoading}
-                loadingText="Регистрация..."
+                loadingText={t('register.loading')}
               >
-                Регистрация
+                {t('register.submit')}
               </Button>
             </VStack>
           </form>
 
           <Text color="gray.500" fontSize="sm">
-            Имате акаунт?{' '}
+            {t('register.login_text')}{' '}
             <Link as={RouterLink} to="/login" color="brand.500" fontWeight="500">
-              Вход
+              {t('register.login_link')}
             </Link>
           </Text>
         </VStack>

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+import { Button } from '@chakra-ui/react';
 
 const API_URL = '/api/auth';
 
@@ -80,6 +83,7 @@ const MatrixRain: React.FC = () => {
 };
 
 const ResetPasswordPage: React.FC = () => {
+    const { t } = useTranslation();
     const { token } = useParams<{ token: string }>();
     const { register, handleSubmit, formState: { errors } } = useForm<ResetPasswordRequest>();
     const [error, setError] = useState<string | null>(null);
@@ -96,8 +100,8 @@ const ResetPasswordPage: React.FC = () => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: 'Неуспешно нулиране на парола' }));
-                throw new Error(errorData.message || 'Неуспешно нулиране на парола');
+                const errorData = await response.json().catch(() => ({ message: t('errors.reset_password_failed') }));
+                throw new Error(errorData.message || t('errors.reset_password_failed'));
             }
 
             setSuccess(true);
@@ -111,6 +115,10 @@ const ResetPasswordPage: React.FC = () => {
     return (
         <div className="flex items-center justify-center min-h-screen relative">
             <MatrixRain />
+            <div className="absolute top-4 right-4 z-20">
+                <Button size="sm" onClick={() => i18n.changeLanguage('en')} mr={2} colorScheme="green">en</Button>
+                <Button size="sm" onClick={() => i18n.changeLanguage('bg')} colorScheme="green">bg</Button>
+            </div>
 
             <div className="w-full max-w-md p-8 space-y-6 bg-black/80 backdrop-blur-sm rounded-lg shadow-2xl border border-green-500/30 relative z-10">
                 {/* Logo/Title */}
@@ -127,25 +135,25 @@ const ResetPasswordPage: React.FC = () => {
                     <div className="h-px bg-gradient-to-r from-transparent via-green-500 to-transparent mt-4"></div>
                 </div>
 
-                <h3 className="text-lg font-medium text-center text-green-200">Нова парола</h3>
+                <h3 className="text-lg font-medium text-center text-green-200">{t('reset_password.title')}</h3>
 
                 {success ? (
                     <div className="text-center p-4 bg-green-900/50 border border-green-500/50 rounded-md">
-                        <p className="text-green-400">Паролата е променена успешно!</p>
+                        <p className="text-green-400">{t('reset_password.success_message')}</p>
                         <Link to="/login" className="font-medium text-green-300 hover:text-green-200 transition-colors">
-                            Влезте в системата
+                            {t('reset_password.login_link')}
                         </Link>
                     </div>
                 ) : (
                     <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
                         <div>
                             <label htmlFor="password" className="block text-sm font-medium text-green-300">
-                                Нова парола
+                                {t('reset_password.password')}
                             </label>
                             <input
                                 id="password"
                                 type="password"
-                                {...register('password', { required: 'Паролата е задължителна' })}
+                                {...register('password', { required: t('reset_password.password_required') })}
                                 className="block w-full px-3 py-2 mt-1 bg-black/50 text-green-400 placeholder-green-700 border border-green-500/50 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
                                 placeholder="••••••••"
                             />
@@ -163,7 +171,7 @@ const ResetPasswordPage: React.FC = () => {
                                 type="submit"
                                 className="flex justify-center w-full px-4 py-2 text-sm font-medium text-black bg-green-500 border border-transparent rounded-md shadow-sm hover:bg-green-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-black transition-all duration-200 hover:shadow-green-500/50 hover:shadow-lg"
                             >
-                                Запази нова парола
+                                {t('reset_password.submit')}
                             </button>
                         </div>
                     </form>
@@ -171,7 +179,7 @@ const ResetPasswordPage: React.FC = () => {
 
                 <div className="text-sm text-center">
                     <Link to="/login" className="font-medium text-green-400 hover:text-green-300 transition-colors">
-                        Обратно към вход
+                        {t('reset_password.back_to_login')}
                     </Link>
                 </div>
 

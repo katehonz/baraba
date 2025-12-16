@@ -15,11 +15,13 @@ import {
   Link,
   Divider,
 } from '@chakra-ui/react';
+import { useTranslation } from 'react-i18next';
 import { companiesApi } from '../api/companies';
 import { currenciesApi } from '../api/currencies';
 import { fixedAssetCategoriesApi } from '../api/fixedAssetCategories';
 import { useCompany } from '../contexts/CompanyContext';
 import type { Company, Currency, FixedAssetCategory } from '../types';
+import i18n from '../i18n';
 
 interface SummaryCardProps {
   title: string;
@@ -94,6 +96,7 @@ function QuickAction({ to, icon, title, description }: QuickActionProps) {
 }
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const { companyId } = useCompany();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -143,9 +146,9 @@ export default function HomePage() {
       {/* Header */}
       <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
         <Box>
-          <Heading size="lg">Начално табло</Heading>
+          <Heading size="lg">{t('homepage.title')}</Heading>
           <Text mt={1} fontSize="sm" color="gray.500">
-            Обобщение на системата - EUR базова валута (България в еврозоната от 2025)
+            {t('homepage.subtitle')}
           </Text>
         </Box>
         <HStack spacing={3}>
@@ -155,7 +158,7 @@ export default function HomePage() {
             colorScheme="blue"
             size="sm"
           >
-            Нов запис
+            {t('homepage.new_entry')}
           </Button>
           <Button
             as={RouterLink}
@@ -163,35 +166,37 @@ export default function HomePage() {
             variant="outline"
             size="sm"
           >
-            Компании
+            {t('homepage.companies')}
           </Button>
+          <Button size="sm" onClick={() => i18n.changeLanguage('en')} mr={2}>en</Button>
+          <Button size="sm" onClick={() => i18n.changeLanguage('bg')}>bg</Button>
         </HStack>
       </Flex>
 
       {/* Summary Cards */}
       <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={6}>
         <SummaryCard
-          title="Компании"
+          title={t('homepage.companies')}
           value={companies.length}
-          hint={companies.length > 0 ? `${companies.filter((c: Company) => c.isActive).length} активни` : 'Създайте първата компания'}
+          hint={companies.length > 0 ? `${companies.filter((c: Company) => c.isActive).length} ${t('homepage.companies_active')}` : t('homepage.companies_create_first')}
           colorScheme="blue"
         />
         <SummaryCard
-          title="Базова валута"
+          title={t('homepage.base_currency')}
           value={baseCurrency?.code || 'EUR'}
-          hint="Фиксиран курс BGN/EUR: 1.95583"
+          hint={t('homepage.fixed_rate_hint')}
           colorScheme="green"
         />
         <SummaryCard
-          title="Валути"
+          title={t('homepage.currencies')}
           value={currencies.length}
-          hint="Курсове от ЕЦБ"
+          hint={t('homepage.ecb_rates_hint')}
           colorScheme="purple"
         />
         <SummaryCard
-          title="Категории ДА"
+          title={t('homepage.fixed_asset_categories')}
           value={categories.length}
-          hint="Данъчни категории по ЗКПО"
+          hint={t('homepage.tax_categories_hint')}
           colorScheme="teal"
         />
       </SimpleGrid>
@@ -209,17 +214,17 @@ export default function HomePage() {
           shadow="sm"
         >
           <Flex justify="space-between" align="center" mb={4}>
-            <Heading size="md">Компании</Heading>
+            <Heading size="md">{t('homepage.companies')}</Heading>
             <Link as={RouterLink} to="/companies" color="blue.500" fontSize="sm" fontWeight="medium">
-              Управление
+              {t('homepage.manage')}
             </Link>
           </Flex>
 
           {companies.length === 0 ? (
             <VStack py={8}>
-              <Text color="gray.500" mb={4}>Няма създадени компании</Text>
+              <Text color="gray.500" mb={4}>{t('homepage.no_companies')}</Text>
               <Button as={RouterLink} to="/companies" colorScheme="blue">
-                Създай компания
+                {t('homepage.create_company')}
               </Button>
             </VStack>
           ) : (
@@ -229,12 +234,12 @@ export default function HomePage() {
                   <Box>
                     <Text fontSize="sm" fontWeight="medium">{company.name}</Text>
                     <Text fontSize="xs" color="gray.500">
-                      ЕИК: {company.eik} {company.vatNumber && `| ДДС: ${company.vatNumber}`}
+                      {t('homepage.eik')}: {company.eik} {company.vatNumber && `| ${t('homepage.vat_number')}: ${company.vatNumber}`}
                       {company.city && ` | ${company.city}`}
                     </Text>
                   </Box>
                   <Badge colorScheme={company.isActive ? 'green' : 'gray'}>
-                    {company.isActive ? 'Активна' : 'Неактивна'}
+                    {company.isActive ? t('homepage.active') : t('homepage.inactive')}
                   </Badge>
                 </Flex>
               ))}
@@ -251,37 +256,37 @@ export default function HomePage() {
           p={6}
           shadow="sm"
         >
-          <Heading size="md" mb={4}>Бързи действия</Heading>
+          <Heading size="md" mb={4}>{t('homepage.quick_actions')}</Heading>
           <VStack spacing={3} align="stretch">
             <QuickAction
               to="/journal/entries/new"
               icon="+"
-              title="Нов счетоводен запис"
-              description="Създай дневникова статия"
+              title={t('homepage.new_journal_entry')}
+              description={t('homepage.new_journal_entry_desc')}
             />
             <QuickAction
               to="/accounts"
               icon="="
-              title="Сметкоплан"
-              description="Управление на сметки"
+              title={t('homepage.chart_of_accounts')}
+              description={t('homepage.chart_of_accounts_desc')}
             />
             <QuickAction
               to="/counterparts"
               icon="@"
-              title="Контрагенти"
-              description="Клиенти и доставчици"
+              title={t('homepage.counterparts')}
+              description={t('homepage.counterparts_desc')}
             />
             <QuickAction
               to="/reports"
               icon="#"
-              title="Отчети"
-              description="Справки и отчети"
+              title={t('homepage.reports')}
+              description={t('homepage.reports_desc')}
             />
             <QuickAction
               to="/settings"
               icon="*"
-              title="Настройки"
-              description="Конфигурация на системата"
+              title={t('homepage.settings')}
+              description={t('homepage.settings_desc')}
             />
           </VStack>
         </Box>

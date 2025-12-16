@@ -18,6 +18,8 @@ import {
   useColorMode,
 } from '@chakra-ui/react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const SunIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -32,6 +34,7 @@ const MoonIcon = () => (
 );
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -55,7 +58,7 @@ export default function LoginPage() {
       await login(username, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Грешка при вход');
+      setError(err.response?.data?.error || t('errors.login_failed'));
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +67,10 @@ export default function LoginPage() {
   return (
     <Center minH="100vh" bgGradient={bgGradient} position="relative">
       <Box position="absolute" top={4} right={4}>
+        <Box position="absolute" top={4} left={4}>
+          <Button size="sm" onClick={() => i18n.changeLanguage('en')} mr={2}>en</Button>
+          <Button size="sm" onClick={() => i18n.changeLanguage('bg')}>bg</Button>
+        </Box>
         <IconButton
           aria-label="Toggle color mode"
           icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
@@ -85,8 +92,8 @@ export default function LoginPage() {
       >
         <VStack spacing={6}>
           <VStack spacing={1}>
-            <Heading size="xl" color="brand.500">Baraba</Heading>
-            <Text color="gray.500">Счетоводна система</Text>
+            <Heading size="xl" color="brand.500">{t('login.title')}</Heading>
+            <Text color="gray.500">{t('app.subtitle')}</Text>
           </VStack>
 
           {error && (
@@ -99,7 +106,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} style={{ width: '100%' }}>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Потребителско име</FormLabel>
+                <FormLabel>{t('login.email')}</FormLabel>
                 <Input
                   type="text"
                   value={username}
@@ -110,7 +117,7 @@ export default function LoginPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Парола</FormLabel>
+                <FormLabel>{t('login.password')}</FormLabel>
                 <Input
                   type="password"
                   value={password}
@@ -125,17 +132,17 @@ export default function LoginPage() {
                 size="lg"
                 w="full"
                 isLoading={isLoading}
-                loadingText="Влизане..."
+                loadingText={t('login.loading')}
               >
-                Вход
+                {t('login.submit')}
               </Button>
             </VStack>
           </form>
 
           <Text color="gray.500" fontSize="sm">
-            Нямате акаунт?{' '}
+            {t('login.register_text')}{' '}
             <Link as={RouterLink} to="/register" color="brand.500" fontWeight="500">
-              Регистрация
+              {t('login.register_link')}
             </Link>
           </Text>
         </VStack>

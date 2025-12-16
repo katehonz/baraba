@@ -2,11 +2,20 @@ import std/[json, options, strutils]
 import jester
 import ../services/auth
 import ../utils/json_utils
+import ../utils/i18n
 import ../models/user
 import ../db/config
 
 proc authRoutes*(): auto =
   router authRouter:
+    before:
+      let langHeader = request.headers.getOrDefault("Accept-Language")
+      if langHeader.len > 0:
+        let langs = langHeader.split(',')
+        if langs.len > 0:
+          let lang = langs[0].split(';')[0]
+          initI18n(lang)
+
     # Logic from baraba.nim, adapted for new service signature
     post "/api/auth/login":
       let body = parseJson(request.body)
@@ -25,7 +34,7 @@ proc authRoutes*(): auto =
           "user": {"id": user.id, "username": user.username, "email": user.email}
         })
       else:
-        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалидно потребителско име или парола"})
+        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": i18n("errors.invalid_credentials")})
 
     # Logic from baraba.nim, adapted for new service signature
     post "/api/auth/register":
@@ -52,13 +61,13 @@ proc authRoutes*(): auto =
     get "/api/auth/me":
       let authHeader = request.headers.getOrDefault("Authorization")
       if authHeader.len == 0 or not authHeader.startsWith("Bearer "):
-        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Липсва токен за автентикация"})
+        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": i18n("errors.missing_token")})
         return
 
       let token = authHeader[7..^1]
       let (valid, userId, username) = verifyToken(token)
       if not valid:
-        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалиден токен"})
+        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": i18n("errors.invalid_token")})
         return
 
       let db = getDbConn()
@@ -73,6 +82,6 @@ proc authRoutes*(): auto =
           "email": user.email
         })
       else:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Потребителят не е намерен"})
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": i18n("errors.user_not_found")})
 
   return authRouter
