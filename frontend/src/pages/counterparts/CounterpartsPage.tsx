@@ -28,6 +28,7 @@ import {
   useColorModeValue,
   useDisclosure,
 } from '@chakra-ui/react';
+import { useTranslation } from 'react-i18next';
 import { counterpartsApi } from '../../api/counterparts';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Counterpart } from '../../types';
@@ -44,6 +45,7 @@ export default function CounterpartsPage() {
   });
   const { currentCompany } = useCompany();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { t } = useTranslation();
 
   const tableBg = useColorModeValue('white', 'gray.800');
 
@@ -84,7 +86,7 @@ export default function CounterpartsPage() {
   if (!currentCompany) {
     return (
       <Center h="200px">
-        <Text color="gray.500">Моля, изберете фирма</Text>
+        <Text color="gray.500">{t('counterparts.pleaseSelectCompany')}</Text>
       </Center>
     );
   }
@@ -100,33 +102,33 @@ export default function CounterpartsPage() {
   return (
     <VStack spacing={6} align="stretch">
       <HStack justify="space-between">
-        <Heading size="lg">Контрагенти</Heading>
-        <Button colorScheme="brand" onClick={onOpen}>Нов контрагент</Button>
+        <Heading size="lg">{t('counterparts.title')}</Heading>
+        <Button colorScheme="brand" onClick={onOpen}>{t('counterparts.create')}</Button>
       </HStack>
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
         <ModalContent>
           <form onSubmit={handleSubmit}>
-            <ModalHeader>Нов контрагент</ModalHeader>
+            <ModalHeader>{t('counterparts.create')}</ModalHeader>
             <ModalBody>
               <VStack spacing={4}>
                 <FormControl isRequired>
-                  <FormLabel>Име</FormLabel>
+                  <FormLabel>{t('counterparts.name')}</FormLabel>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>ЕИК</FormLabel>
+                  <FormLabel>{t('counterparts.eik')}</FormLabel>
                   <Input
                     value={formData.eik}
                     onChange={(e) => setFormData({ ...formData, eik: e.target.value })}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>ДДС номер</FormLabel>
+                  <FormLabel>{t('counterparts.vat_number')}</FormLabel>
                   <Input
                     value={formData.vatNumber}
                     onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
@@ -137,20 +139,20 @@ export default function CounterpartsPage() {
                     isChecked={formData.isCustomer}
                     onChange={(e) => setFormData({ ...formData, isCustomer: e.target.checked })}
                   >
-                    Клиент
+                    {t('counterparts.client')}
                   </Checkbox>
                   <Checkbox
                     isChecked={formData.isSupplier}
                     onChange={(e) => setFormData({ ...formData, isSupplier: e.target.checked })}
                   >
-                    Доставчик
+                    {t('counterparts.supplier')}
                   </Checkbox>
                 </HStack>
               </VStack>
             </ModalBody>
             <ModalFooter>
-              <Button variant="ghost" mr={3} onClick={onClose}>Отказ</Button>
-              <Button colorScheme="brand" type="submit">Създай</Button>
+              <Button variant="ghost" mr={3} onClick={onClose}>{t('counterparts.cancel')}</Button>
+              <Button colorScheme="brand" type="submit">{t('common.create')}</Button>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -160,16 +162,16 @@ export default function CounterpartsPage() {
         <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>Име</Th>
-              <Th>ЕИК</Th>
-              <Th>Тип</Th>
+              <Th>{t('counterparts.name')}</Th>
+              <Th>{t('counterparts.eik')}</Th>
+              <Th>{t('counterparts.type')}</Th>
             </Tr>
           </Thead>
           <Tbody>
             {counterparts.length === 0 ? (
               <Tr>
                 <Td colSpan={3}>
-                  <Text color="gray.500" textAlign="center">Няма контрагенти</Text>
+                  <Text color="gray.500" textAlign="center">{t('counterparts.no_counterparts')}</Text>
                 </Td>
               </Tr>
             ) : (
@@ -179,8 +181,8 @@ export default function CounterpartsPage() {
                   <Td>{cp.eik}</Td>
                   <Td>
                     <HStack spacing={2}>
-                      {cp.isCustomer && <Badge colorScheme="blue">Клиент</Badge>}
-                      {cp.isSupplier && <Badge colorScheme="purple">Доставчик</Badge>}
+                      {cp.isCustomer && <Badge colorScheme="blue">{t('counterparts.client')}</Badge>}
+                      {cp.isSupplier && <Badge colorScheme="purple">{t('counterparts.supplier')}</Badge>}
                     </HStack>
                   </Td>
                 </Tr>

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { usersApi } from '../../api/users';
 import { userGroupsApi } from '../../api/userGroups';
+import { useTranslation } from 'react-i18next';
 import type { User, UserGroup } from '../../types';
 
 export default function Users() {
+  const { t } = useTranslation();
   const [showModal, setShowModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -81,12 +83,12 @@ export default function Users() {
     setError('');
 
     if (!formData.username || !formData.email || !formData.firstName || !formData.lastName) {
-      setError('Всички полета са задължителни');
+      setError(t('users.allFieldsRequired'));
       return;
     }
 
     if (!editingUser && !formData.password) {
-      setError('Паролата е задължителна за нов потребител');
+      setError(t('users.passwordRequiredForNew'));
       return;
     }
 
@@ -115,12 +117,12 @@ export default function Users() {
       resetForm();
       fetchData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Грешка при запис');
+      setError(err instanceof Error ? err.message : t('users.saveError'));
     }
   };
 
   const handleDelete = async (user: User) => {
-    if (!window.confirm(`Сигурни ли сте, че искате да изтриете потребител "${user.username}"?`)) {
+    if (!window.confirm(t('modals.confirmations.delete_user', { username: user.username }))) {
       return;
     }
 
@@ -128,7 +130,7 @@ export default function Users() {
       await usersApi.deleteUser(user.id);
       fetchData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Грешка при изтриване');
+      setError(err instanceof Error ? err.message : t('users.deleteError'));
     }
   };
 
@@ -144,12 +146,12 @@ export default function Users() {
     setError('');
 
     if (!newPassword || newPassword.length < 6) {
-      setError('Паролата трябва да е поне 6 символа');
+      setError(t('users.passwordTooShort'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Паролите не съвпадат');
+      setError(t('errors.passwords_mismatch'));
       return;
     }
 
@@ -157,11 +159,11 @@ export default function Users() {
       if (selectedUserId) {
         await usersApi.resetUserPassword(selectedUserId, newPassword);
         setShowPasswordModal(false);
-        setSuccess('Паролата беше успешно променена');
+        setSuccess(t('users.passwordChangedSuccess'));
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Грешка при смяна на парола');
+      setError(err instanceof Error ? err.message : t('users.passwordChangeError'));
     }
   };
 
@@ -176,7 +178,7 @@ export default function Users() {
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Потребители</h1>
+        <h1 className="text-2xl font-bold text-gray-800">{t('settings.users')}</h1>
         <button
           onClick={() => {
             resetForm();
@@ -187,7 +189,7 @@ export default function Users() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Нов потребител
+          {t('users.new')}
         </button>
       </div>
 
@@ -208,22 +210,22 @@ export default function Users() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Потребител
+                {t('users.user')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Име
+                {t('common.name')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
+                {t('login.email')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Група
+                {t('users.group')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Статус
+                {t('common.status')}
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Действия
+                {t('users.actions')}
               </th>
             </tr>
           </thead>
@@ -248,21 +250,21 @@ export default function Users() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                    {groups.find(g => g.id === user.groupId)?.name || 'Без група'}
+                    {groups.find(g => g.id === user.groupId)?.name || t('users.noGroup')}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                     user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
-                    {user.isActive ? 'Активен' : 'Неактивен'}
+                    {user.isActive ? t('common.active') : t('common.inactive')}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     onClick={() => handleEdit(user)}
                     className="text-blue-600 hover:text-blue-900 mr-3"
-                    title="Редактиране"
+                    title={t('common.edit')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -271,7 +273,7 @@ export default function Users() {
                   <button
                     onClick={() => handleResetPassword(user.id)}
                     className="text-yellow-600 hover:text-yellow-900 mr-3"
-                    title="Смяна на парола"
+                    title={t('users.changePassword')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
@@ -280,7 +282,7 @@ export default function Users() {
                   <button
                     onClick={() => handleDelete(user)}
                     className="text-red-600 hover:text-red-900"
-                    title="Изтриване"
+                    title={t('common.delete')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -294,7 +296,7 @@ export default function Users() {
 
         {users.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-            Няма добавени потребители
+            {t('users.noUsers')}
           </div>
         )}
       </div>
@@ -305,7 +307,7 @@ export default function Users() {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="text-lg font-semibold text-gray-800">
-                {editingUser ? 'Редактиране на потребител' : 'Нов потребител'}
+                {editingUser ? t('users.editTitle') : t('users.newTitle')}
               </h2>
               <button
                 onClick={() => {
@@ -330,7 +332,7 @@ export default function Users() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Потребителско име *
+                    {t('users.username')}
                   </label>
                   <input
                     type="text"
@@ -343,7 +345,7 @@ export default function Users() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email *
+                    {t('users.email')}
                   </label>
                   <input
                     type="email"
@@ -356,7 +358,7 @@ export default function Users() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Име *
+                    {t('users.firstName')}
                   </label>
                   <input
                     type="text"
@@ -369,7 +371,7 @@ export default function Users() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Фамилия *
+                    {t('users.lastName')}
                   </label>
                   <input
                     type="text"
@@ -383,7 +385,7 @@ export default function Users() {
                 {!editingUser && (
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Парола *
+                      {t('users.password')}
                     </label>
                     <input
                       type="password"
@@ -398,14 +400,14 @@ export default function Users() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Група
+                    {t('users.group')}
                   </label>
                   <select
                     value={formData.groupId}
                     onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="">Без група</option>
+                    <option value="">{t('users.noGroup')}</option>
                     {groups.map((group) => (
                       <option key={group.id} value={group.id}>
                         {group.name}
@@ -422,7 +424,7 @@ export default function Users() {
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Активен</span>
+                    <span className="ml-2 text-sm text-gray-700">{t('common.active')}</span>
                   </label>
                 </div>
               </div>
@@ -436,14 +438,14 @@ export default function Users() {
                   }}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
                 >
-                  Отказ
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={creating || updating}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {creating || updating ? 'Запазване...' : 'Запази'}
+                  {creating || updating ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </form>
@@ -456,7 +458,7 @@ export default function Users() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold text-gray-800">Смяна на парола</h2>
+              <h2 className="text-lg font-semibold text-gray-800">{t('users.changePassword')}</h2>
               <button
                 onClick={() => setShowPasswordModal(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -477,7 +479,7 @@ export default function Users() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Нова парола *
+                    {t('users.newPassword')}
                   </label>
                   <input
                     type="password"
@@ -491,7 +493,7 @@ export default function Users() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Потвърди парола *
+                    {t('users.confirmPassword')}
                   </label>
                   <input
                     type="password"
@@ -510,14 +512,14 @@ export default function Users() {
                   onClick={() => setShowPasswordModal(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
                 >
-                  Отказ
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={resetting}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {resetting ? 'Запазване...' : 'Смени парола'}
+                  {resetting ? t('common.saving') : t('users.changePassword')}
                 </button>
               </div>
             </form>

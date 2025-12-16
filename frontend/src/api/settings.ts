@@ -36,34 +36,34 @@ export interface SaltEdgeSettings {
 
 export const settingsApi = {
   getCompanySettings: async (companyId: number): Promise<Company> => {
-    const { data } = await api.get<Company>(`/companies/${companyId}`);
+    const { data } = await api.get<Company>(`/api/companies/${companyId}`);
     return data;
   },
 
   updateDefaultAccounts: async (companyId: number, accounts: DefaultAccounts): Promise<Company> => {
-    const { data } = await api.put<Company>(`/companies/${companyId}/default-accounts`, accounts);
+    const { data } = await api.put<Company>(`/api/companies/${companyId}/default-accounts`, accounts);
     return data;
   },
 
   // SMTP Settings
   getSystemSettings: async (): Promise<SystemSettings> => {
-    const { data } = await api.get<SystemSettings>('/system-settings');
+    const { data } = await api.get<SystemSettings>('/api/system-settings');
     return data;
   },
 
   updateSmtpSettings: async (settings: Partial<SmtpSettings>): Promise<SystemSettings> => {
-    const { data } = await api.put<SystemSettings>('/system-settings/smtp', settings);
+    const { data } = await api.put<SystemSettings>('/api/system-settings/smtp', settings);
     return data;
   },
 
   testSmtpConnection: async (testEmail: string): Promise<boolean> => {
-    const { data } = await api.post<{ success: boolean }>('/system-settings/smtp/test', { testEmail });
+    const { data } = await api.post<{ success: boolean }>('/api/system-settings/smtp/test', { testEmail });
     return data.success;
   },
 
   // Salt Edge Settings (per company)
   updateSaltEdgeSettings: async (companyId: number, settings: Partial<SaltEdgeSettings>): Promise<Company> => {
-    const { data } = await api.put<Company>(`/companies/${companyId}/salt-edge`, settings);
+    const { data } = await api.put<Company>(`/api/companies/${companyId}/salt-edge`, settings);
     return data;
   },
 };

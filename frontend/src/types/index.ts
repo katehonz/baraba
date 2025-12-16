@@ -135,6 +135,86 @@ export interface FixedAssetCategory {
   companyId: number;
 }
 
+export type FixedAssetStatus = 'ACTIVE' | 'DEPRECIATED' | 'DISPOSED' | 'SOLD';
+export type DepreciationMethod = 'LINEAR' | 'DECLINING_BALANCE';
+
+export interface FixedAsset {
+  id: number;
+  name: string;
+  inventoryNumber: string;
+  description: string;
+  categoryId: number;
+  companyId: number;
+  acquisitionDate: string;
+  acquisitionCost: number;
+  residualValue: number;
+  documentNumber: string;
+  documentDate?: string;
+  putIntoServiceDate?: string;
+  status: FixedAssetStatus;
+  depreciationMethod: DepreciationMethod;
+  accountingDepreciationRate: number;
+  taxDepreciationRate: number;
+  accountingAccumulatedDepreciation: number;
+  accountingBookValue: number;
+  taxAccumulatedDepreciation: number;
+  taxBookValue: number;
+  lastDepreciationDate?: string;
+  disposedDate?: string;
+  disposalAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DepreciationJournal {
+  id: number;
+  fixedAssetId: number;
+  fixedAssetName: string;
+  fixedAssetInventoryNumber: string;
+  period: string;
+  accountingDepreciationAmount: number;
+  accountingBookValueBefore: number;
+  accountingBookValueAfter: number;
+  taxDepreciationAmount: number;
+  taxBookValueBefore: number;
+  taxBookValueAfter: number;
+  isPosted: boolean;
+  journalEntryId?: number;
+  postedAt?: string;
+}
+
+export interface CalculatedPeriod {
+  year: number;
+  month: number;
+  periodDisplay: string;
+  isPosted: boolean;
+  totalAccountingAmount: number;
+  totalTaxAmount: number;
+  assetsCount: number;
+}
+
+export interface CalculationResult {
+  calculated: Array<{
+    fixedAssetId: number;
+    fixedAssetName: string;
+    accountingDepreciationAmount: number;
+    taxDepreciationAmount: number;
+  }>;
+  errors: Array<{
+    fixedAssetId: number;
+    assetName: string;
+    errorMessage: string;
+  }>;
+  totalAccountingAmount: number;
+  totalTaxAmount: number;
+}
+
+export interface PostResult {
+  journalEntryId: number;
+  totalAmount: number;
+  assetsCount: number;
+}
+
 // Journal types
 export interface JournalEntry {
   id: number;

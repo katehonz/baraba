@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "metaData": {
+    "url": "https://github.com/dom96/httpbeast",
+    "downloadMethod": "git",
+    "vcsRevision": "abc13d11c210b614960fe8760e581d44cfb2e3e9",
+    "files": [
+      "/httpbeast.nim",
+      "/httpbeast.nimble",
+      "/httpbeast.nim.cfg",
+      "/httpbeast/parser.nim"
+    ],
+    "binaries": [],
+    "specialVersions": [
+      "0.4.1"
+    ]
+  }
+}

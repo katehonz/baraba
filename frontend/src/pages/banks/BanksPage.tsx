@@ -39,6 +39,7 @@ import { useCompany } from '../../contexts/CompanyContext';
 import { banksApi } from '../../api/banks';
 import { accountsApi } from '../../api/accounts';
 import { currenciesApi } from '../../api/currencies';
+import { useTranslation } from 'react-i18next';
 import type { BankProfile, CreateBankProfileInput, SaltEdgeProvider, Account, Currency, ImportFormat } from '../../types';
 
 // Icons
@@ -89,6 +90,7 @@ const initialFormState: Omit<CreateBankProfileInput, 'companyId'> = {
 };
 
 export default function BanksPage() {
+  const { t } = useTranslation();
   const { companyId } = useCompany();
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -134,7 +136,7 @@ export default function BanksPage() {
       setAccounts(accountsData);
       setCurrencies(currenciesData);
     } catch (error) {
-      toast({ title: 'Error loading data', status: 'error' });
+      toast({ title: t('banks.loadError'), status: 'error' });
     } finally {
       setLoading(false);
     }
@@ -189,15 +191,15 @@ export default function BanksPage() {
   const handleSubmit = async () => {
     if (!companyId) return;
     if (!formState.name.trim()) {
-      toast({ title: 'Bank name required', status: 'warning' });
+      toast({ title: t('banks.nameRequired'), status: 'warning' });
       return;
     }
     if (!formState.accountId) {
-      toast({ title: 'Select analytical account', status: 'warning' });
+      toast({ title: t('banks.analyticalAccountRequired'), status: 'warning' });
       return;
     }
     if (!formState.bufferAccountId) {
-      toast({ title: 'Select buffer account', status: 'warning' });
+      toast({ title: t('banks.bufferAccountRequired'), status: 'warning' });
       return;
     }
 
@@ -210,28 +212,28 @@ export default function BanksPage() {
 
       if (editingId) {
         await banksApi.update(editingId, input);
-        toast({ title: 'Profile updated', status: 'success' });
+        toast({ title: t('banks.profileUpdated'), status: 'success' });
       } else {
         await banksApi.create(input);
-        toast({ title: 'Profile created', status: 'success' });
+        toast({ title: t('banks.profileCreated'), status: 'success' });
       }
       loadData();
       resetForm();
     } catch (error: any) {
-      toast({ title: error.message || 'Error saving', status: 'error' });
+      toast({ title: error.message || t('banks.saveError'), status: 'error' });
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this bank profile?')) return;
+    if (!confirm(t('modals.confirmations.delete_bank_profile'))) return;
     try {
       await banksApi.delete(id);
-      toast({ title: 'Profile deleted', status: 'success' });
+      toast({ title: t('banks.profileDeleted'), status: 'success' });
       loadData();
     } catch (error: any) {
-      toast({ title: error.message || 'Error deleting', status: 'error' });
+      toast({ title: error.message || t('banks.deleteError'), status: 'error' });
     }
   };
 
@@ -243,7 +245,7 @@ export default function BanksPage() {
         window.location.href = connectUrl;
       }
     } catch (error) {
-      toast({ title: 'Connection error', status: 'error' });
+      toast({ title: t('banks.connectionError'), status: 'error' });
     } finally {
       setConnecting(false);
     }
@@ -252,10 +254,10 @@ export default function BanksPage() {
   const handleSync = async (profileId: number) => {
     try {
       const result = await banksApi.syncTransactions(profileId);
-      toast({ title: `Synced ${result.count} transactions`, status: 'success' });
+      toast({ title: t('banks.syncedTransactions', { count: result.count }), status: 'success' });
       loadData();
     } catch (error) {
-      toast({ title: 'Sync error', status: 'error' });
+      toast({ title: t('banks.syncError'), status: 'error' });
     }
   };
 
@@ -272,7 +274,7 @@ export default function BanksPage() {
         window.location.href = connectUrl;
       }
     } catch (error: any) {
-      toast({ title: error.message || 'Connection error', status: 'error' });
+      toast({ title: error.message || t('banks.connectionError'), status: 'error' });
     } finally {
       setConnecting(false);
     }
@@ -281,11 +283,11 @@ export default function BanksPage() {
   const getStatusBadge = (profile: BankProfile) => {
     if (profile.connectionType === 'SALT_EDGE') {
       const status = profile.saltEdgeStatus;
-      if (status === 'active') return <Badge colorScheme="green">Connected</Badge>;
-      if (status === 'pending') return <Badge colorScheme="yellow">Pending</Badge>;
-      return <Badge colorScheme="red">Disconnected</Badge>;
+      if (status === 'active') return <Badge colorScheme="green">{t('banks.connected')}</Badge>;
+      if (status === 'pending') return <Badge colorScheme="yellow">{t('banks.pending')}</Badge>;
+      return <Badge colorScheme="red">{t('banks.disconnected')}</Badge>;
     }
-    return profile.isActive ? <Badge colorScheme="green">Active</Badge> : <Badge colorScheme="gray">Inactive</Badge>;
+    return profile.isActive ? <Badge colorScheme="green">{t('common.active')}</Badge> : <Badge colorScheme="gray">{t('common.inactive')}</Badge>;
   };
 
   const formatAccount = (accountId: number) => {
@@ -306,11 +308,11 @@ export default function BanksPage() {
       {/* Header */}
       <HStack justify="space-between" mb={6}>
         <Box>
-          <Heading size="lg" mb={1}>Banks</Heading>
-          <Text color="gray.500">Manage bank profiles - file import or Open Banking</Text>
+          <Heading size="lg" mb={1}>{t('banks.title')}</Heading>
+          <Text color="gray.500">{t('banks.subtitle')}</Text>
         </Box>
         <Button leftIcon={<Icon as={BankIcon} />} colorScheme="brand" onClick={onOpen}>
-          New Bank Profile
+          {t('banks.new')}
         </Button>
       </HStack>
 
@@ -319,15 +321,15 @@ export default function BanksPage() {
         <Alert status="info" borderRadius="lg">
           <AlertIcon as={FileIcon} />
           <Box>
-            <Text fontWeight="bold">File Import</Text>
-            <Text fontSize="sm">MT940, CAMT.053, XML, CSV formats</Text>
+            <Text fontWeight="bold">{t('banks.fileImport')}</Text>
+            <Text fontSize="sm">{t('banks.fileImportFormats')}</Text>
           </Box>
         </Alert>
         <Alert status="info" borderRadius="lg" colorScheme="purple">
           <AlertIcon as={LinkIcon} />
           <Box>
-            <Text fontWeight="bold">Open Banking (Salt Edge)</Text>
-            <Text fontSize="sm">Automatic transaction sync</Text>
+            <Text fontWeight="bold">{t('banks.openBanking')}</Text>
+            <Text fontSize="sm">{t('banks.openBankingSync')}</Text>
           </Box>
         </Alert>
       </SimpleGrid>
@@ -338,7 +340,7 @@ export default function BanksPage() {
           <Card bg={cardBg}>
             <CardBody>
               <Text textAlign="center" color="gray.500" py={8}>
-                No bank profiles yet. Create your first one.
+                {t('banks.noProfiles')}
               </Text>
             </CardBody>
           </Card>
@@ -361,36 +363,36 @@ export default function BanksPage() {
                         <Heading size="md">{profile.name}</Heading>
                         {getStatusBadge(profile)}
                         <Badge colorScheme={profile.connectionType === 'SALT_EDGE' ? 'purple' : 'blue'}>
-                          {profile.connectionType === 'SALT_EDGE' ? 'Open Banking' : 'File Import'}
+                          {profile.connectionType === 'SALT_EDGE' ? t('banks.openBanking') : t('banks.fileImport')}
                         </Badge>
                       </HStack>
-                      {profile.iban && <Text color="gray.500" fontSize="sm">IBAN: {profile.iban}</Text>}
+                      {profile.iban && <Text color="gray.500" fontSize="sm">{t('banks.iban')}: {profile.iban}</Text>}
                       {profile.saltEdgeProviderName && (
-                        <Text color="gray.500" fontSize="sm">Provider: {profile.saltEdgeProviderName}</Text>
+                        <Text color="gray.500" fontSize="sm">{t('banks.provider')}: {profile.saltEdgeProviderName}</Text>
                       )}
                       <SimpleGrid columns={2} spacing={4} mt={3}>
                         <Box>
-                          <Text fontSize="xs" color="gray.500" fontWeight="bold">Main Account</Text>
+                          <Text fontSize="xs" color="gray.500" fontWeight="bold">{t('banks.mainAccount')}</Text>
                           <Text fontSize="sm">{formatAccount(profile.accountId)}</Text>
                         </Box>
                         <Box>
-                          <Text fontSize="xs" color="gray.500" fontWeight="bold">Buffer Account</Text>
+                          <Text fontSize="xs" color="gray.500" fontWeight="bold">{t('banks.bufferAccount')}</Text>
                           <Text fontSize="sm">{formatAccount(profile.bufferAccountId)}</Text>
                         </Box>
                         <Box>
-                          <Text fontSize="xs" color="gray.500" fontWeight="bold">Currency</Text>
+                          <Text fontSize="xs" color="gray.500" fontWeight="bold">{t('common.currency')}</Text>
                           <Text fontSize="sm">{profile.currencyCode}</Text>
                         </Box>
                         <Box>
                           <Text fontSize="xs" color="gray.500" fontWeight="bold">
-                            {profile.connectionType === 'FILE_IMPORT' ? 'Format' : 'Last Sync'}
+                            {profile.connectionType === 'FILE_IMPORT' ? t('reports.format') : t('banks.lastSync')}
                           </Text>
                           <Text fontSize="sm">
                             {profile.connectionType === 'FILE_IMPORT'
                               ? importFormatOptions.find(o => o.value === profile.importFormat)?.label || profile.importFormat
                               : profile.saltEdgeLastSyncAt
                                 ? new Date(profile.saltEdgeLastSyncAt).toLocaleString('bg-BG')
-                                : 'Never'
+                                : t('banks.never')
                             }
                           </Text>
                         </Box>
@@ -401,7 +403,7 @@ export default function BanksPage() {
                   <ButtonGroup size="sm" variant="outline">
                     {profile.connectionType === 'SALT_EDGE' && (
                       <>
-                        <Tooltip label="Sync transactions">
+                        <Tooltip label={t('banks.syncTransactionsTooltip')}>
                           <IconButton
                             aria-label="Sync"
                             icon={<Icon as={SyncIcon} />}
@@ -414,12 +416,12 @@ export default function BanksPage() {
                           onClick={() => handleConnect(profile.id)}
                           isLoading={connecting}
                         >
-                          {profile.saltEdgeStatus === 'active' ? 'Reconnect' : 'Connect'}
+                          {profile.saltEdgeStatus === 'active' ? t('banks.reconnect') : t('banks.connect')}
                         </Button>
                       </>
                     )}
-                    <Button onClick={() => handleEdit(profile)}>Edit</Button>
-                    <Button colorScheme="red" onClick={() => handleDelete(profile.id)}>Delete</Button>
+                    <Button onClick={() => handleEdit(profile)}>{t('common.edit')}</Button>
+                    <Button colorScheme="red" onClick={() => handleDelete(profile.id)}>{t('common.delete')}</Button>
                   </ButtonGroup>
                 </Flex>
               </CardBody>
@@ -432,13 +434,13 @@ export default function BanksPage() {
       <Modal isOpen={isOpen} onClose={resetForm} size="xl">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>{editingId ? 'Edit Bank Profile' : 'New Bank Profile'}</ModalHeader>
+          <ModalHeader>{editingId ? t('modals.titles.edit_bank_profile') : t('modals.titles.create_bank_profile')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <VStack spacing={4}>
               {/* Connection Type */}
               <FormControl>
-                <FormLabel>Connection Type</FormLabel>
+                <FormLabel>{t('banks.connectionType')}</FormLabel>
                 <HStack spacing={4}>
                   <Button
                     flex={1}
@@ -447,7 +449,7 @@ export default function BanksPage() {
                     leftIcon={<Icon as={FileIcon} />}
                     onClick={() => setFormState(s => ({ ...s, connectionType: 'FILE_IMPORT' }))}
                   >
-                    File Import
+                    {t('banks.fileImport')}
                   </Button>
                   <Button
                     flex={1}
@@ -456,32 +458,32 @@ export default function BanksPage() {
                     leftIcon={<Icon as={LinkIcon} />}
                     onClick={() => setFormState(s => ({ ...s, connectionType: 'SALT_EDGE' }))}
                   >
-                    Open Banking
+                    {t('banks.openBanking')}
                   </Button>
                 </HStack>
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Bank Name</FormLabel>
+                <FormLabel>{t('banks.bankName')}</FormLabel>
                 <Input
                   value={formState.name}
                   onChange={e => setFormState(s => ({ ...s, name: e.target.value }))}
-                  placeholder="UniCredit Bulbank"
+                  placeholder={t('banks.namePlaceholder')}
                 />
               </FormControl>
 
               <FormControl>
-                <FormLabel>IBAN</FormLabel>
+                <FormLabel>{t('banks.iban')}</FormLabel>
                 <Input
                   value={formState.iban}
                   onChange={e => setFormState(s => ({ ...s, iban: e.target.value }))}
-                  placeholder="BGxx XXXX XXXX XXXX"
+                  placeholder={t('banks.ibanPlaceholder')}
                 />
               </FormControl>
 
               {formState.connectionType === 'FILE_IMPORT' && (
                 <FormControl isRequired>
-                  <FormLabel>Import Format</FormLabel>
+                  <FormLabel>{t('banks.importFormat')}</FormLabel>
                   <Select
                     value={formState.importFormat}
                     onChange={e => setFormState(s => ({ ...s, importFormat: e.target.value as ImportFormat }))}
@@ -495,14 +497,14 @@ export default function BanksPage() {
 
               {formState.connectionType === 'SALT_EDGE' && (
                 <FormControl isRequired>
-                  <FormLabel>Bank (Open Banking)</FormLabel>
+                  <FormLabel>{t('banks.openBankingBank')}</FormLabel>
                   {loadingProviders ? (
                     <Spinner size="sm" />
                   ) : (
                     <Select
                       value={formState.saltEdgeProviderCode}
                       onChange={e => setFormState(s => ({ ...s, saltEdgeProviderCode: e.target.value }))}
-                      placeholder="Select bank..."
+                      placeholder={t('banks.selectBank')}
                     >
                       {providers.map(p => (
                         <option key={p.code} value={p.code}>{p.name}</option>
@@ -515,11 +517,11 @@ export default function BanksPage() {
               <Divider />
 
               <FormControl isRequired>
-                <FormLabel>Analytical Account (Bank)</FormLabel>
+                <FormLabel>{t('banks.analyticalAccount')}</FormLabel>
                 <Select
                   value={formState.accountId}
                   onChange={e => setFormState(s => ({ ...s, accountId: parseInt(e.target.value) }))}
-                  placeholder="Select account..."
+                  placeholder={t('journal.selectAccount')}
                 >
                   {analyticalAccounts.map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
@@ -528,11 +530,11 @@ export default function BanksPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Buffer Account (484)</FormLabel>
+                <FormLabel>{t('banks.bufferAccount484')}</FormLabel>
                 <Select
                   value={formState.bufferAccountId}
                   onChange={e => setFormState(s => ({ ...s, bufferAccountId: parseInt(e.target.value) }))}
-                  placeholder="Select account..."
+                  placeholder={t('journal.selectAccount')}
                 >
                   {analyticalAccounts.map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
@@ -541,7 +543,7 @@ export default function BanksPage() {
               </FormControl>
 
               <FormControl>
-                <FormLabel>Currency</FormLabel>
+                <FormLabel>{t('common.currency')}</FormLabel>
                 <Select
                   value={formState.currencyCode}
                   onChange={e => setFormState(s => ({ ...s, currencyCode: e.target.value }))}
@@ -553,7 +555,7 @@ export default function BanksPage() {
               </FormControl>
 
               <FormControl display="flex" alignItems="center">
-                <FormLabel mb={0}>Active</FormLabel>
+                <FormLabel mb={0}>{t('common.active')}</FormLabel>
                 <Switch
                   isChecked={formState.isActive}
                   onChange={e => setFormState(s => ({ ...s, isActive: e.target.checked }))}
@@ -570,12 +572,12 @@ export default function BanksPage() {
                   onClick={handleInitiateConnection}
                   isLoading={connecting}
                 >
-                  Connect to Bank
+                  {t('banks.connectToBank')}
                 </Button>
               )}
-              <Button variant="ghost" onClick={resetForm}>Cancel</Button>
+              <Button variant="ghost" onClick={resetForm}>{t('common.cancel')}</Button>
               <Button colorScheme="brand" onClick={handleSubmit} isLoading={saving}>
-                {editingId ? 'Save' : 'Create'}
+                {editingId ? t('common.save') : t('common.create')}
               </Button>
             </HStack>
           </ModalFooter>

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { journalApi } from '../../api/journal';
 import { useCompany } from '../../contexts/CompanyContext';
+import { useTranslation } from 'react-i18next';
 import type { JournalEntry } from '../../types';
 
 // Check if entry is from VAT form (has documentType like '01', '02', etc.)
@@ -11,6 +12,7 @@ const isVatEntry = (entry: JournalEntry): boolean => {
 };
 
 export default function JournalEntriesPage() {
+  const { t } = useTranslation();
   const { companyId } = useCompany();
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'POSTED' | 'DRAFT'>('ALL');
   const [search, setSearch] = useState('');
@@ -72,22 +74,22 @@ export default function JournalEntriesPage() {
   };
 
   const handleUnpost = async (id: number) => {
-    if (!confirm('Сигурни ли сте, че искате да разосчетоводите този запис?')) return;
+    if (!confirm(t('modals.confirmations.unpost_journal_entry'))) return;
     try {
       const updatedEntry = await journalApi.unpost(id);
       setEntries(prev => prev.map(e => e.id === id ? updatedEntry : e));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Грешка при разосчетоводяване');
+      alert(err instanceof Error ? err.message : t('alerts.errors.unpost_failed'));
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Сигурни ли сте, че искате да изтриете този запис?')) return;
+    if (!confirm(t('modals.confirmations.delete_journal_entry'))) return;
     try {
       await journalApi.delete(id);
       setEntries(prev => prev.filter(e => e.id !== id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Грешка при изтриване');
+      alert(err instanceof Error ? err.message : t('alerts.errors.delete_failed'));
     }
   };
 

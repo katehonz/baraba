@@ -22,6 +22,7 @@ import {
   useColorModeValue,
   useDisclosure,
 } from '@chakra-ui/react';
+import { useTranslation } from 'react-i18next';
 import { companiesApi } from '../../api/companies';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Company } from '../../types';
@@ -32,6 +33,7 @@ export default function CompaniesPage() {
   const [formData, setFormData] = useState({ name: '', eik: '', vatNumber: '', address: '', city: '' });
   const { currentCompany, setCurrentCompany } = useCompany();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { t } = useTranslation();
 
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
@@ -80,47 +82,47 @@ export default function CompaniesPage() {
   return (
     <VStack spacing={6} align="stretch">
       <HStack justify="space-between">
-        <Heading size="lg">Фирми</Heading>
-        <Button colorScheme="brand" onClick={onOpen}>Нова фирма</Button>
+        <Heading size="lg">{t('companies.title')}</Heading>
+        <Button colorScheme="brand" onClick={onOpen}>{t('companies.create')}</Button>
       </HStack>
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
         <ModalContent>
           <form onSubmit={handleSubmit}>
-            <ModalHeader>Нова фирма</ModalHeader>
+            <ModalHeader>{t('companies.create')}</ModalHeader>
             <ModalBody>
               <VStack spacing={4}>
                 <FormControl isRequired>
-                  <FormLabel>Име</FormLabel>
+                  <FormLabel>{t('companies.name')}</FormLabel>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>ЕИК</FormLabel>
+                  <FormLabel>{t('companies.eik')}</FormLabel>
                   <Input
                     value={formData.eik}
                     onChange={(e) => setFormData({ ...formData, eik: e.target.value })}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>ДДС номер</FormLabel>
+                  <FormLabel>{t('companies.vat_number')}</FormLabel>
                   <Input
                     value={formData.vatNumber}
                     onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Адрес</FormLabel>
+                  <FormLabel>{t('companies.address')}</FormLabel>
                   <Input
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Град</FormLabel>
+                  <FormLabel>{t('companies.city')}</FormLabel>
                   <Input
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
@@ -129,15 +131,15 @@ export default function CompaniesPage() {
               </VStack>
             </ModalBody>
             <ModalFooter>
-              <Button variant="ghost" mr={3} onClick={onClose}>Отказ</Button>
-              <Button colorScheme="brand" type="submit">Създай</Button>
+              <Button variant="ghost" mr={3} onClick={onClose}>{t('common.cancel')}</Button>
+              <Button colorScheme="brand" type="submit">{t('common.create')}</Button>
             </ModalFooter>
           </form>
         </ModalContent>
       </Modal>
 
       {companies.length === 0 ? (
-        <Text color="gray.500">Няма създадени фирми</Text>
+        <Text color="gray.500">{t('companies.no_companies')}</Text>
       ) : (
         <Grid templateColumns="repeat(auto-fill, minmax(280px, 1fr))" gap={4}>
           {companies.map((company) => (
@@ -156,11 +158,11 @@ export default function CompaniesPage() {
               <HStack justify="space-between" align="start" mb={2}>
                 <Heading size="md">{company.name}</Heading>
                 {currentCompany?.id === company.id && (
-                  <Badge colorScheme="blue">Избрана</Badge>
+                  <Badge colorScheme="blue">{t('companies.selected')}</Badge>
                 )}
               </HStack>
-              <Text color="gray.500" fontSize="sm">ЕИК: {company.eik}</Text>
-              {company.vatNumber && <Text color="gray.500" fontSize="sm">ДДС: {company.vatNumber}</Text>}
+              <Text color="gray.500" fontSize="sm">{t('companies.eik_prefix')}{company.eik}</Text>
+              {company.vatNumber && <Text color="gray.500" fontSize="sm">{t('companies.vat_prefix')}{company.vatNumber}</Text>}
               {company.city && <Text color="gray.500" fontSize="sm">{company.city}</Text>}
             </Box>
           ))}

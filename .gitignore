@@ -1,10 +1,5 @@
-# Old Java project
-old/
-
-# Blog
-BLOG/
-
 # Nim build artifacts
+bin/
 src/baraba
 src/db/migrate
 *.exe
@@ -38,5 +33,9 @@ npm-debug.log*
 
 # PostgreSQL
 *.sql.backup
-baraba
 src/test_db
+
+# Temporary/local files
+old/
+old-nim/
+BLOG/

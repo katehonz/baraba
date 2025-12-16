@@ -51,7 +51,7 @@ psql -U postgres -c "CREATE DATABASE jesterac;"
 
 ```bash
 # Clone
-git clone https://gitlab.com/balvatar/baraba.git
+git clone https://github.com/katehonz/baraba.git
 cd baraba
 
 # Frontend dependencies
@@ -276,13 +276,19 @@ apt install postgresql postgresql-contrib
 # Инсталирай Node.js (за frontend build)
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
+
+# Инсталирай Caddy (препоръчително)
+apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install caddy
 ```
 
 ### 2. Deploy
 
 ```bash
 # Clone проекта
-git clone https://gitlab.com/balvatar/baraba.git
+git clone https://github.com/katehonz/baraba.git
 cd baraba
 
 # Настрой базата данни
@@ -291,12 +297,12 @@ sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'your-password';"
 
 # Редактирай src/db/config.nim с новата парола
 
-# Build backend
-nim c -d:release -d:ssl -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
+# Build backend (използва config.nims автоматично)
+nim c -d:release src/baraba.nim
 
 # Миграции
-nim c -d:ssl -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/migrate src/db/migrate.nim
-./bin/migrate
+nim c -d:release src/db/migrate.nim
+./src/migrate
 
 # Build frontend
 cd frontend
@@ -305,10 +311,24 @@ npm run build
 cd ..
 ```
 
-### 3. Systemd service
+### 3. Environment Variables
+
+Сървърът поддържа следните environment variables:
+
+| Variable | Default | Описание |
+|----------|---------|----------|
+| `PORT` | 5000 | Порт на който слуша сървъра |
 
 ```bash
-# /etc/systemd/system/baraba.service
+# Примери
+./baraba                    # Слуша на порт 5000
+PORT=5001 ./baraba          # Слуша на порт 5001
+```
+
+### 4. Single Instance (за development/малки сайтове)
+
+**Systemd service** (`/etc/systemd/system/baraba.service`):
+```ini
 [Unit]
 Description=Baraba Accounting API
 After=network.target postgresql.service
@@ -316,9 +336,10 @@ After=network.target postgresql.service
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/var/www/baraba
-ExecStart=/var/www/baraba/bin/baraba
+WorkingDirectory=/opt/baraba
+ExecStart=/opt/baraba/baraba
 Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
@@ -329,29 +350,134 @@ systemctl enable baraba
 systemctl start baraba
 ```
 
-### 4. Nginx reverse proxy
+### 5. Multi-Instance Cluster (за production с много ядра)
+
+За максимална производителност на multi-core сървъри, стартирайте множество инстанции зад load balancer.
+
+**Systemd template** (`/etc/systemd/system/baraba@.service`):
+```ini
+[Unit]
+Description=Baraba Accounting API (port %i)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/baraba
+Environment="PORT=%i"
+ExecStart=/opt/baraba/baraba
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Активиране на 16 инстанции** (за 16-core сървър):
+```bash
+for i in {5000..5015}; do
+    systemctl enable baraba@$i
+    systemctl start baraba@$i
+done
+
+# Провери статуса
+systemctl status 'baraba@*'
+```
+
+### 6. Caddy Reverse Proxy (препоръчително)
+
+**Caddyfile** (`/etc/caddy/Caddyfile`):
+```caddyfile
+baraba.example.com {
+    # Frontend static files
+    root * /opt/baraba/frontend/dist
+    file_server
+
+    # API и GraphQL - load balanced към множество инстанции
+    handle /api/* {
+        reverse_proxy localhost:5000 localhost:5001 localhost:5002 localhost:5003 \
+                      localhost:5004 localhost:5005 localhost:5006 localhost:5007 \
+                      localhost:5008 localhost:5009 localhost:5010 localhost:5011 \
+                      localhost:5012 localhost:5013 localhost:5014 localhost:5015 {
+            lb_policy least_conn
+            health_uri /health
+            health_interval 10s
+        }
+    }
+
+    handle /graphql {
+        reverse_proxy localhost:5000 localhost:5001 localhost:5002 localhost:5003 \
+                      localhost:5004 localhost:5005 localhost:5006 localhost:5007 \
+                      localhost:5008 localhost:5009 localhost:5010 localhost:5011 \
+                      localhost:5012 localhost:5013 localhost:5014 localhost:5015 {
+            lb_policy least_conn
+        }
+    }
+
+    # SPA fallback
+    handle {
+        try_files {path} /index.html
+    }
+}
+```
+
+За **single instance**:
+```caddyfile
+baraba.example.com {
+    root * /opt/baraba/frontend/dist
+    file_server
+
+    handle /api/* {
+        reverse_proxy localhost:5000
+    }
+
+    handle /graphql {
+        reverse_proxy localhost:5000
+    }
+
+    handle {
+        try_files {path} /index.html
+    }
+}
+```
+
+```bash
+systemctl reload caddy
+```
+
+### 7. Nginx Reverse Proxy (алтернатива)
 
 ```nginx
+upstream baraba_cluster {
+    least_conn;
+    server 127.0.0.1:5000;
+    server 127.0.0.1:5001;
+    server 127.0.0.1:5002;
+    server 127.0.0.1:5003;
+    # ... добави още за повече ядра
+}
+
 server {
     listen 80;
     server_name your-domain.com;
 
     # Frontend static files
     location / {
-        root /var/www/baraba/frontend/dist;
+        root /opt/baraba/frontend/dist;
         try_files $uri $uri/ /index.html;
     }
 
     # API proxy
     location /api {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://baraba_cluster;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
     # GraphQL proxy
     location /graphql {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://baraba_cluster;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

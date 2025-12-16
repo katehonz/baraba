@@ -1,11 +1,12 @@
 ## Baraba - Счетоводна програма
 ## REST API built with Jester + Nim
 
-import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient]
+import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient, os]
 import jester
+import asynchttpserver
 import norm/postgres
 
-import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category]
+import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile]
 import services/auth
 import db/config
 import utils/json_utils
@@ -23,6 +24,14 @@ import routes/fixed_asset_category_routes
 import routes/vies_routes
 
 var graphqlCtx {.threadvar.}: GraphqlRef
+var graphqlInitialized {.threadvar.}: bool
+
+proc getGraphqlCtx(): GraphqlRef =
+  ## Lazy initialization of GraphQL context per thread
+  if not graphqlInitialized:
+    graphqlCtx = setupGraphQL()
+    graphqlInitialized = true
+  result = graphqlCtx
 
 const corsHeaders* = @{
   "Access-Control-Allow-Origin": "*",
@@ -63,6 +72,14 @@ router mainRouter:
   options "/api/users/@id/reset-password": resp Http200, corsHeaders, ""
   options "/api/user-groups": resp Http200, corsHeaders, ""
   options "/api/fixed-asset-categories": resp Http200, corsHeaders, ""
+  options "/api/banks": resp Http200, corsHeaders, ""
+  options "/api/banks/@id": resp Http200, corsHeaders, ""
+  options "/api/fixed-assets": resp Http200, corsHeaders, ""
+  options "/api/fixed-assets/@id": resp Http200, corsHeaders, ""
+  options "/api/fixed-assets/calculate-depreciation": resp Http200, corsHeaders, ""
+  options "/api/fixed-assets/post-depreciation": resp Http200, corsHeaders, ""
+  options "/api/depreciation-journal": resp Http200, corsHeaders, ""
+  options "/api/calculated-periods": resp Http200, corsHeaders, ""
   options "/api/validate-vat": resp Http200, corsHeaders, ""
   options "/api/journal-entries": resp Http200, corsHeaders, ""
   options "/api/journal-entries/@id": resp Http200, corsHeaders, ""
@@ -72,6 +89,13 @@ router mainRouter:
   options "/api/entry-lines/@id": resp Http200, corsHeaders, ""
   options "/api/reports/turnover-sheet": resp Http200, corsHeaders, ""
   options "/api/reports/general-ledger": resp Http200, corsHeaders, ""
+  options "/api/system-settings": resp Http200, corsHeaders, ""
+  options "/api/system-settings/smtp": resp Http200, corsHeaders, ""
+  options "/api/system-settings/smtp/test": resp Http200, corsHeaders, ""
+  options "/api/companies/@id/salt-edge": resp Http200, corsHeaders, ""
+  options "/api/scanned-invoices": resp Http200, corsHeaders, ""
+  options "/api/scanned-invoices/@id": resp Http200, corsHeaders, ""
+  options "/api/scanned-invoices/@id/process": resp Http200, corsHeaders, ""
   options "/graphql": resp Http200, corsHeaders, ""
 
   # =====================
@@ -86,6 +110,39 @@ router mainRouter:
 
   get "/health":
     resp Http200, jsonCors, $(%*{"status": "ok"})
+
+  # =====================
+  # SYSTEM SETTINGS
+  # =====================
+  get "/api/system-settings":
+    resp Http200, jsonCors, $(%*{
+      "smtpHost": "smtp.example.com",
+      "smtpPort": 587,
+      "smtpUsername": "user@example.com",
+      "smtpFromEmail": "noreply@example.com",
+      "smtpFromName": "Baraba",
+      "smtpUseTls": true,
+      "smtpUseSsl": false,
+      "smtpEnabled": true
+    })
+
+  put "/api/system-settings/smtp":
+    let body = parseJson(request.body)
+    # TODO: Implement saving of SMTP settings
+    resp Http200, jsonCors, $(%*{"success": true})
+
+  post "/api/system-settings/smtp/test":
+    let body = parseJson(request.body)
+    let testEmail = body["testEmail"].getStr()
+    # TODO: Implement sending of test email
+    echo "Sending test email to " & testEmail
+    resp Http200, jsonCors, $(%*{"success": true})
+
+  put "/api/companies/@id/salt-edge":
+    let companyId = parseInt(@"id")
+    let body = parseJson(request.body)
+    # TODO: Implement saving of SaltEdge settings
+    resp Http200, jsonCors, $(%*{"success": true})
 
   # =====================
   # AUTH ROUTES
@@ -794,6 +851,32 @@ router mainRouter:
       resp Http200, jsonCors, """{"message": "VIES validation not implemented yet"}"""
 
   # =====================
+  # SCANNER ROUTES
+  # =====================
+  get "/api/scanned-invoices":
+    let companyId = request.params.getOrDefault("companyId", "0")
+    resp Http200, jsonCors, "[]"
+
+  post "/api/scanned-invoices":
+    resp Http201, jsonCors, $(%*{"id": 1, "fileName": "invoice.pdf", "status": "UPLOADED"})
+
+  get "/api/scanned-invoices/@id":
+    let id = @"id".parseInt
+    resp Http200, jsonCors, $(%*{"id": id, "fileName": "invoice.pdf", "status": "UPLOADED", "lines": []})
+
+  put "/api/scanned-invoices/@id":
+    let id = @"id".parseInt
+    resp Http200, jsonCors, $(%*{"id": id, "fileName": "invoice.pdf", "status": "PROCESSING"})
+
+  delete "/api/scanned-invoices/@id":
+    let id = @"id".parseInt
+    resp Http200, jsonCors, $(%*{"success": true})
+
+  post "/api/scanned-invoices/@id/process":
+    let id = @"id".parseInt
+    resp Http200, jsonCors, $(%*{"id": id, "status": "PROCESSED"})
+
+  # =====================
   # JOURNAL ROUTES
   # =====================
   get "/api/journal-entries":
@@ -1217,10 +1300,447 @@ router mainRouter:
       releaseDbConn(db)
 
   # =====================
+  # BANK PROFILE ROUTES
+  # =====================
+  get "/api/banks":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let db = getDbConn()
+    try:
+      var banks = @[newBankProfile()]
+      if companyId > 0:
+        db.select(banks, "company_id = $1", companyId)
+      else:
+        db.selectAll(banks)
+      if banks.len == 1 and banks[0].id == 0:
+        banks = @[]
+      resp Http200, jsonCors, $toJsonArray(banks)
+    finally:
+      releaseDbConn(db)
+
+  get "/api/banks/@id":
+    let id = @"id".parseInt
+    let db = getDbConn()
+    try:
+      var bank = newBankProfile()
+      db.select(bank, "id = $1", id)
+      if bank.id == 0:
+        resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
+      else:
+        resp Http200, jsonCors, $toJson(bank)
+    finally:
+      releaseDbConn(db)
+
+  post "/api/banks":
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var bank = newBankProfile(
+        name = body["name"].getStr,
+        iban = body.getOrDefault("iban").getStr(""),
+        account_id = body["accountId"].getInt.int64,
+        buffer_account_id = body["bufferAccountId"].getInt.int64,
+        company_id = body["companyId"].getInt.int64,
+        currency_code = body.getOrDefault("currencyCode").getStr("BGN"),
+        connection_type = body.getOrDefault("connectionType").getStr("MANUAL"),
+        import_format = body.getOrDefault("importFormat").getStr("MT940"),
+        saltedge_provider_code = body.getOrDefault("saltEdgeProviderCode").getStr(""),
+        saltedge_provider_name = body.getOrDefault("saltEdgeProviderName").getStr(""),
+        is_active = body.getOrDefault("isActive").getBool(true)
+      )
+      db.insert(bank)
+      resp Http201, jsonCors, $toJson(bank)
+    except CatchableError as e:
+      resp Http400, jsonCors, $(%*{"error": e.msg})
+    finally:
+      releaseDbConn(db)
+
+  put "/api/banks/@id":
+    let id = @"id".parseInt
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var bank = newBankProfile()
+      db.select(bank, "id = $1", id)
+      if bank.id == 0:
+        resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
+      else:
+        if body.hasKey("name"):
+          bank.name = body["name"].getStr
+        if body.hasKey("iban"):
+          bank.iban = body["iban"].getStr
+        if body.hasKey("accountId"):
+          bank.account_id = body["accountId"].getInt.int64
+        if body.hasKey("bufferAccountId"):
+          bank.buffer_account_id = body["bufferAccountId"].getInt.int64
+        if body.hasKey("currencyCode"):
+          bank.currency_code = body["currencyCode"].getStr
+        if body.hasKey("connectionType"):
+          bank.connection_type = body["connectionType"].getStr
+        if body.hasKey("importFormat"):
+          bank.import_format = body["importFormat"].getStr
+        if body.hasKey("isActive"):
+          bank.is_active = body["isActive"].getBool
+        bank.updated_at = now()
+        db.update(bank)
+        resp Http200, jsonCors, $toJson(bank)
+    finally:
+      releaseDbConn(db)
+
+  delete "/api/banks/@id":
+    let id = @"id".parseInt
+    let db = getDbConn()
+    try:
+      var bank = newBankProfile()
+      db.select(bank, "id = $1", id)
+      if bank.id == 0:
+        resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
+      else:
+        db.delete(bank)
+        resp Http200, jsonCors, """{"success": true}"""
+    finally:
+      releaseDbConn(db)
+
+  # =====================
+  # FIXED ASSET ROUTES
+  # =====================
+  get "/api/fixed-assets":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let status = request.params.getOrDefault("status", "")
+    let db = getDbConn()
+    try:
+      var assets = @[newFixedAsset()]
+      if companyId > 0:
+        if status != "":
+          db.select(assets, "company_id = $1 AND status = $2", companyId, status)
+        else:
+          db.select(assets, "company_id = $1", companyId)
+      else:
+        db.selectAll(assets)
+      if assets.len == 1 and assets[0].id == 0:
+        assets = @[]
+      resp Http200, jsonCors, $toJsonArray(assets)
+    finally:
+      releaseDbConn(db)
+
+  get "/api/fixed-assets/@id":
+    let id = @"id".parseInt
+    let db = getDbConn()
+    try:
+      var asset = newFixedAsset()
+      db.select(asset, "id = $1", id)
+      if asset.id == 0:
+        resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
+      else:
+        resp Http200, jsonCors, $toJson(asset)
+    finally:
+      releaseDbConn(db)
+
+  post "/api/fixed-assets":
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var category = newFixedAssetCategory()
+      let categoryId = body["categoryId"].getInt
+      db.select(category, "id = $1", categoryId)
+
+      let acquisitionCost = body["acquisitionCost"].getFloat
+
+      var asset = newFixedAsset(
+        name = body["name"].getStr,
+        inventory_number = body["inventoryNumber"].getStr,
+        description = body.getOrDefault("description").getStr(""),
+        category_id = categoryId.int64,
+        company_id = body["companyId"].getInt.int64,
+        acquisition_date = parse(body["acquisitionDate"].getStr, "yyyy-MM-dd"),
+        acquisition_cost = acquisitionCost,
+        residual_value = body.getOrDefault("residualValue").getFloat(0.0),
+        document_number = body.getOrDefault("documentNumber").getStr(""),
+        status = "ACTIVE",
+        depreciation_method = body.getOrDefault("depreciationMethod").getStr("LINEAR"),
+        accounting_depreciation_rate = if category.id > 0: category.max_depreciation_rate else: 15.0,
+        tax_depreciation_rate = if category.id > 0: category.max_depreciation_rate else: 15.0
+      )
+
+      if body.hasKey("documentDate") and body["documentDate"].getStr != "":
+        asset.document_date = some(parse(body["documentDate"].getStr, "yyyy-MM-dd"))
+      if body.hasKey("putIntoServiceDate") and body["putIntoServiceDate"].getStr != "":
+        asset.put_into_service_date = some(parse(body["putIntoServiceDate"].getStr, "yyyy-MM-dd"))
+
+      asset.accounting_book_value = acquisitionCost
+      asset.tax_book_value = acquisitionCost
+
+      db.insert(asset)
+      resp Http201, jsonCors, $toJson(asset)
+    except CatchableError as e:
+      resp Http400, jsonCors, $(%*{"error": e.msg})
+    finally:
+      releaseDbConn(db)
+
+  put "/api/fixed-assets/@id":
+    let id = @"id".parseInt
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var asset = newFixedAsset()
+      db.select(asset, "id = $1", id)
+      if asset.id == 0:
+        resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
+      else:
+        if body.hasKey("name"):
+          asset.name = body["name"].getStr
+        if body.hasKey("description"):
+          asset.description = body["description"].getStr
+        if body.hasKey("status"):
+          asset.status = body["status"].getStr
+        if body.hasKey("accountingDepreciationRate"):
+          asset.accounting_depreciation_rate = body["accountingDepreciationRate"].getFloat
+        if body.hasKey("taxDepreciationRate"):
+          asset.tax_depreciation_rate = body["taxDepreciationRate"].getFloat
+
+        asset.updated_at = now()
+        db.update(asset)
+        resp Http200, jsonCors, $toJson(asset)
+    finally:
+      releaseDbConn(db)
+
+  delete "/api/fixed-assets/@id":
+    let id = @"id".parseInt
+    let db = getDbConn()
+    try:
+      var asset = newFixedAsset()
+      db.select(asset, "id = $1", id)
+      if asset.id == 0:
+        resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
+      else:
+        db.delete(asset)
+        resp Http200, jsonCors, """{"success": true}"""
+    finally:
+      releaseDbConn(db)
+
+  post "/api/fixed-assets/calculate-depreciation":
+    let body = parseJson(request.body)
+    let companyId = body["companyId"].getInt
+    let year = body["year"].getInt
+    let month = body["month"].getInt
+    let db = getDbConn()
+    try:
+      var assets = @[newFixedAsset()]
+      db.select(assets, "company_id = $1 AND status = $2", companyId, "ACTIVE")
+      if assets.len == 1 and assets[0].id == 0:
+        assets = @[]
+
+      var calculated: seq[JsonNode] = @[]
+      var totalAccountingAmount = 0.0
+      var totalTaxAmount = 0.0
+      var errors: seq[JsonNode] = @[]
+
+      for asset in assets:
+        var existing = @[newDepreciationJournal()]
+        db.select(existing, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
+                  asset.id, year, month)
+        if existing.len > 0 and existing[0].id > 0:
+          continue
+
+        let monthlyAccountingRate = asset.accounting_depreciation_rate / 12.0 / 100.0
+        let monthlyTaxRate = asset.tax_depreciation_rate / 12.0 / 100.0
+
+        let accountingDepreciation = min(
+          asset.accounting_book_value * monthlyAccountingRate,
+          asset.accounting_book_value - asset.residual_value
+        )
+        let taxDepreciation = min(
+          asset.tax_book_value * monthlyTaxRate,
+          asset.tax_book_value
+        )
+
+        if accountingDepreciation <= 0 and taxDepreciation <= 0:
+          continue
+
+        var journal = newDepreciationJournal(
+          fixed_asset_id = asset.id,
+          company_id = companyId.int64,
+          period_year = year,
+          period_month = month,
+          accounting_depreciation_amount = accountingDepreciation,
+          accounting_book_value_before = asset.accounting_book_value,
+          accounting_book_value_after = asset.accounting_book_value - accountingDepreciation,
+          tax_depreciation_amount = taxDepreciation,
+          tax_book_value_before = asset.tax_book_value,
+          tax_book_value_after = asset.tax_book_value - taxDepreciation
+        )
+        db.insert(journal)
+
+        var assetToUpdate = asset
+        assetToUpdate.accounting_accumulated_depreciation += accountingDepreciation
+        assetToUpdate.accounting_book_value -= accountingDepreciation
+        assetToUpdate.tax_accumulated_depreciation += taxDepreciation
+        assetToUpdate.tax_book_value -= taxDepreciation
+        assetToUpdate.last_depreciation_date = some(now())
+        assetToUpdate.updated_at = now()
+
+        if assetToUpdate.accounting_book_value <= assetToUpdate.residual_value:
+          assetToUpdate.status = "DEPRECIATED"
+
+        db.update(assetToUpdate)
+
+        totalAccountingAmount += accountingDepreciation
+        totalTaxAmount += taxDepreciation
+
+        calculated.add(%*{
+          "fixedAssetId": asset.id,
+          "fixedAssetName": asset.name,
+          "accountingDepreciationAmount": accountingDepreciation,
+          "taxDepreciationAmount": taxDepreciation
+        })
+
+      resp Http200, jsonCors, $(%*{
+        "calculated": calculated,
+        "errors": errors,
+        "totalAccountingAmount": totalAccountingAmount,
+        "totalTaxAmount": totalTaxAmount
+      })
+    except CatchableError as e:
+      resp Http400, jsonCors, $(%*{"error": e.msg})
+    finally:
+      releaseDbConn(db)
+
+  post "/api/fixed-assets/post-depreciation":
+    let body = parseJson(request.body)
+    let companyId = body["companyId"].getInt
+    let year = body["year"].getInt
+    let month = body["month"].getInt
+    let db = getDbConn()
+    try:
+      var entries = @[newDepreciationJournal()]
+      db.select(entries, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
+                companyId, year, month, false)
+      if entries.len == 1 and entries[0].id == 0:
+        entries = @[]
+
+      if entries.len == 0:
+        resp Http400, jsonCors, """{"error": "No unposted depreciation entries found"}"""
+
+      var totalAmount = 0.0
+      for entry in entries:
+        totalAmount += entry.accounting_depreciation_amount
+
+      var journalEntry = newJournalEntry(
+        company_id = companyId.int64,
+        description = "Месечна амортизация " & $month & "/" & $year,
+        document_number = "АМОР-" & $year & "-" & $month,
+        total_amount = totalAmount
+      )
+      db.insert(journalEntry)
+
+      for entry in entries:
+        var e = entry
+        e.is_posted = true
+        e.journal_entry_id = some(journalEntry.id)
+        e.posted_at = some(now())
+        e.updated_at = now()
+        db.update(e)
+
+      resp Http200, jsonCors, $(%*{
+        "journalEntryId": journalEntry.id,
+        "totalAmount": totalAmount,
+        "assetsCount": entries.len
+      })
+    except CatchableError as e:
+      resp Http400, jsonCors, $(%*{"error": e.msg})
+    finally:
+      releaseDbConn(db)
+
+  get "/api/depreciation-journal":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let year = request.params.getOrDefault("year", "0").parseInt
+    let month = request.params.getOrDefault("month", "")
+    let db = getDbConn()
+    try:
+      var entries = @[newDepreciationJournal()]
+      if month != "":
+        db.select(entries, "company_id = $1 AND period_year = $2 AND period_month = $3",
+                  companyId, year, month.parseInt)
+      else:
+        db.select(entries, "company_id = $1 AND period_year = $2", companyId, year)
+      if entries.len == 1 and entries[0].id == 0:
+        entries = @[]
+
+      var journalResult: seq[JsonNode] = @[]
+      for entry in entries:
+        var asset = newFixedAsset()
+        db.select(asset, "id = $1", entry.fixed_asset_id)
+        var entryJson = %*{
+          "id": entry.id,
+          "fixedAssetId": entry.fixed_asset_id,
+          "fixedAssetName": asset.name,
+          "fixedAssetInventoryNumber": asset.inventory_number,
+          "period": $entry.period_year & "-" & (if entry.period_month < 10: "0" else: "") & $entry.period_month & "-01",
+          "accountingDepreciationAmount": entry.accounting_depreciation_amount,
+          "accountingBookValueBefore": entry.accounting_book_value_before,
+          "accountingBookValueAfter": entry.accounting_book_value_after,
+          "taxDepreciationAmount": entry.tax_depreciation_amount,
+          "taxBookValueBefore": entry.tax_book_value_before,
+          "taxBookValueAfter": entry.tax_book_value_after,
+          "isPosted": entry.is_posted
+        }
+        if entry.journal_entry_id.isSome:
+          entryJson["journalEntryId"] = %entry.journal_entry_id.get
+        else:
+          entryJson["journalEntryId"] = newJNull()
+        if entry.posted_at.isSome:
+          entryJson["postedAt"] = %entry.posted_at.get.format("yyyy-MM-dd'T'HH:mm:ss")
+        else:
+          entryJson["postedAt"] = newJNull()
+        journalResult.add(entryJson)
+
+      resp Http200, jsonCors, $(%journalResult)
+    finally:
+      releaseDbConn(db)
+
+  get "/api/calculated-periods":
+    let companyId = request.params.getOrDefault("companyId", "0").parseInt
+    let db = getDbConn()
+    try:
+      let rows = db.getAllRows(sql"""
+        SELECT period_year, period_month,
+               bool_and(is_posted) as all_posted,
+               SUM(accounting_depreciation_amount) as total_accounting,
+               SUM(tax_depreciation_amount) as total_tax,
+               COUNT(*) as assets_count
+        FROM "DepreciationJournal"
+        WHERE company_id = $1
+        GROUP BY period_year, period_month
+        ORDER BY period_year DESC, period_month DESC
+      """, companyId)
+
+      var periodsResult: seq[JsonNode] = @[]
+      for row in rows:
+        let year = parseInt($row[0])
+        let month = parseInt($row[1])
+        let monthNames = ["Януари", "Февруари", "Март", "Април", "Май", "Юни",
+                         "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"]
+        periodsResult.add(%*{
+          "year": year,
+          "month": month,
+          "periodDisplay": monthNames[month - 1] & " " & $year,
+          "isPosted": $row[2] == "t",
+          "totalAccountingAmount": parseFloat($row[3]),
+          "totalTaxAmount": parseFloat($row[4]),
+          "assetsCount": parseInt($row[5])
+        })
+
+      resp Http200, jsonCors, $(%periodsResult)
+    except CatchableError:
+      resp Http200, jsonCors, "[]"
+    finally:
+      releaseDbConn(db)
+
+  # =====================
   # GRAPHQL ENDPOINT
   # =====================
   post "/graphql":
-    if graphqlCtx.isNil:
+    let ctx = getGraphqlCtx()
+    if ctx.isNil:
       resp Http500, jsonCors, $(%*{"error": "GraphQL not initialized"})
 
     let body = parseJson(request.body)
@@ -1232,11 +1752,11 @@ router mainRouter:
       resp Http400, jsonCors, $(%*{"error": "Query is required"})
 
     # Clear previous query state
-    graphqlCtx.purgeQueries(includeVariables = true, includeStored = false)
+    ctx.purgeQueries(includeVariables = true, includeStored = false)
 
     # Parse variables
     if not variables.isNil and variables.kind == JObject:
-      let varsRes = graphqlCtx.parseVars($variables)
+      let varsRes = ctx.parseVars($variables)
       if varsRes.isErr:
         var errMsgs: seq[string]
         for e in varsRes.error:
@@ -1244,7 +1764,7 @@ router mainRouter:
         resp Http400, jsonCors, $(%*{"errors": errMsgs})
 
     # Parse and validate query
-    let queryRes = graphqlCtx.parseQuery(query)
+    let queryRes = ctx.parseQuery(query)
     if queryRes.isErr:
       var errMsgs: seq[string]
       for e in queryRes.error:
@@ -1253,7 +1773,7 @@ router mainRouter:
 
     # Execute
     let jsonResp = JsonRespStream.new()
-    let execRes = graphqlCtx.executeRequest(respStream(jsonResp), operationName)
+    let execRes = ctx.executeRequest(respStream(jsonResp), operationName)
     if execRes.isErr:
       var errMsgs: seq[string]
       for e in execRes.error:
@@ -1290,6 +1810,10 @@ router mainRouter:
     resp Http200, {"Content-Type": "text/html"}, graphiqlHtml
 
 proc main() =
+  # Get port from environment variable or default to 5000
+  let portStr = getEnv("PORT", "5000")
+  let port = try: parseInt(portStr) except: 5000
+
   echo "Starting Baraba API server..."
   initDbPool()
   defer: closeDbPool()
@@ -1302,8 +1826,10 @@ proc main() =
   else:
     echo "GraphQL ready at /graphql"
 
-  echo "http://localhost:5000"
-  let settings = newSettings(port = Port(5000))
+  echo "http://localhost:", port
+  # Use httpbeast with 1 thread - for multi-core scaling, run multiple instances
+  # behind Caddy/nginx load balancer
+  let settings = newSettings(port = Port(port), numThreads = 1)
   var jester = initJester(mainRouter, settings = settings)
   jester.serve()
 

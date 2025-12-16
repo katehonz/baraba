@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "metaData": {
+    "url": "https://github.com/dom96/jester/",
+    "downloadMethod": "git",
+    "vcsRevision": "2dfac077170c62cd6ffc73e3dcfa29d29c641dcf",
+    "files": [
+      "/jester/private/errorpages.nim",
+      "/jester/request.nim",
+      "/jester/private/utils.nim",
+      "/jester.nimble",
+      "/jester.nim",
+      "/jester/patterns.nim"
+    ],
+    "binaries": [],
+    "specialVersions": [
+      "0.6.0"
+    ]
+  }
+}

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { vatRatesApi } from '../../api/vatRates';
 import { useCompany } from '../../contexts/CompanyContext';
+import { useTranslation } from 'react-i18next';
 import type { VatRate } from '../../types';
 
 export default function VatRates() {
+  const { t } = useTranslation();
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
@@ -40,12 +42,12 @@ export default function VatRates() {
     setError('');
 
     if (!formData.code || !formData.name || !formData.rate) {
-      setError('Кодът, името и ставката са задължителни');
+      setError(t('vatRates.codeNameRateRequired'));
       return;
     }
 
     if (!companyId) {
-      setError('Моля, изберете фирма');
+      setError(t('accounts.pleaseSelectCompany'));
       return;
     }
 
@@ -68,18 +70,18 @@ export default function VatRates() {
       });
       fetchData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Грешка при създаване');
+      setError(err instanceof Error ? err.message : t('vatRates.createError'));
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Сигурни ли сте, че искате да изтриете тази ставка?')) return;
+    if (!confirm(t('modals.confirmations.delete_vat_rate'))) return;
 
     try {
       await vatRatesApi.deleteVatRate(id);
       fetchData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Грешка при изтриване');
+      alert(err instanceof Error ? err.message : t('vatRates.deleteError'));
     }
   };
 
@@ -100,16 +102,16 @@ export default function VatRates() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">ДДС Ставки</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('settings.vat_rates')}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Управление на ставките по ЗДДС
+            {t('vatRates.subtitle')}
           </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
         >
-          + Нова ставка
+          {t('vatRates.new')}
         </button>
       </div>
 
@@ -118,11 +120,11 @@ export default function VatRates() {
         <div className="flex items-start">
           <span className="text-2xl mr-3">📋</span>
           <div>
-            <h3 className="text-sm font-medium text-yellow-900">Стандартни ставки по ЗДДС (България)</h3>
+            <h3 className="text-sm font-medium text-yellow-900">{t('vatRates.standardRatesBG')}</h3>
             <ul className="mt-1 text-sm text-yellow-700 list-disc list-inside">
-              <li>Стандартна ставка: 20%</li>
-              <li>Намалена ставка: 9% (хотели, туризъм)</li>
-              <li>Нулева ставка: 0% (износ, вътреобщностни доставки)</li>
+              <li>{t('vatRates.standardRate')}</li>
+              <li>{t('vatRates.reducedRate')}</li>
+              <li>{t('vatRates.zeroRate')}</li>
             </ul>
           </div>
         </div>
@@ -132,7 +134,7 @@ export default function VatRates() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {vatRates.length === 0 ? (
           <div className="col-span-full bg-white shadow-sm rounded-lg border border-gray-200 p-12 text-center text-gray-500">
-            Няма създадени ДДС ставки
+            {t('vatRates.noRates')}
           </div>
         ) : (
           vatRates.map(rate => (
@@ -150,7 +152,7 @@ export default function VatRates() {
                     </span>
                     {rate.isDefault && (
                       <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
-                        По подразбиране
+                        {t('vatRates.default')}
                       </span>
                     )}
                   </div>
@@ -163,34 +165,34 @@ export default function VatRates() {
 
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">В сила от:</span>
+                  <span className="text-gray-500">{t('vatRates.effectiveFrom')}:</span>
                   <span className="text-gray-700">{formatDate(rate.effectiveFrom)}</span>
                 </div>
                 {rate.effectiveTo && (
                   <div className="flex items-center justify-between text-sm mt-1">
-                    <span className="text-gray-500">До:</span>
+                    <span className="text-gray-500">{t('vatRates.effectiveTo')}:</span>
                     <span className="text-gray-700">{formatDate(rate.effectiveTo)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-sm mt-1">
-                  <span className="text-gray-500">Статус:</span>
+                  <span className="text-gray-500">{t('common.status')}:</span>
                   <span className={`px-2 py-0.5 text-xs rounded-full ${
                     rate.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                   }`}>
-                    {rate.isActive ? 'Активна' : 'Неактивна'}
+                    {rate.isActive ? t('common.active') : t('common.inactive')}
                   </span>
                 </div>
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button className="text-sm text-blue-600 hover:text-blue-700">
-                  Редактирай
+                  {t('common.edit')}
                 </button>
                 <button
                   onClick={() => handleDelete(rate.id)}
                   className="text-sm text-red-600 hover:text-red-700"
                 >
-                  Изтрий
+                  {t('common.delete')}
                 </button>
               </div>
             </div>
@@ -204,7 +206,7 @@ export default function VatRates() {
           <div className="bg-white rounded-lg w-full max-w-md shadow-2xl">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Нова ДДС ставка</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{t('vatRates.newTitle')}</h2>
                 <button
                   onClick={() => setShowModal(false)}
                   className="text-gray-400 hover:text-gray-600"
@@ -224,7 +226,7 @@ export default function VatRates() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Код *
+                    {t('vatRates.code')}
                   </label>
                   <input
                     type="text"
@@ -236,7 +238,7 @@ export default function VatRates() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ставка (%) *
+                    {t('vatRates.rate')}
                   </label>
                   <input
                     type="number"
@@ -253,20 +255,20 @@ export default function VatRates() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Наименование *
+                  {t('vatRates.name')}
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  placeholder="Стандартна ставка"
+                  placeholder={t('vatRates.standardRatePlaceholder')}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  В сила от *
+                  {t('vatRates.effectiveFrom')} *
                 </label>
                 <input
                   type="date"
@@ -285,7 +287,7 @@ export default function VatRates() {
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="isDefault" className="ml-2 block text-sm text-gray-700">
-                  Ставка по подразбиране
+                  {t('vatRates.isDefault')}
                 </label>
               </div>
 
@@ -295,14 +297,14 @@ export default function VatRates() {
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
-                  Отказ
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {creating ? 'Създаване...' : 'Създай ставка'}
+                  {creating ? t('common.creating') : t('vatRates.create')}
                 </button>
               </div>
             </form>

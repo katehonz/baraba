@@ -41,6 +41,7 @@ import {
 } from '@chakra-ui/react';
 import { useCompany } from '../../contexts/CompanyContext';
 import { scannerApi } from '../../api/scanner';
+import { useTranslation } from 'react-i18next';
 import type { ScannedInvoice, ScannedInvoiceStatus, InvoiceDirection } from '../../types';
 
 // Icons
@@ -75,6 +76,7 @@ const ScanIcon = () => (
 );
 
 export default function ScannedInvoicesPage() {
+  const { t } = useTranslation();
   const { companyId } = useCompany();
   const toast = useToast();
 
@@ -103,7 +105,7 @@ export default function ScannedInvoicesPage() {
       const data = await scannerApi.getScannedInvoices(companyId);
       setInvoices(data);
     } catch (error) {
-      toast({ title: 'Error loading invoices', status: 'error' });
+      toast({ title: t('scanner.loadError'), status: 'error' });
     } finally {
       setLoading(false);
     }
@@ -114,26 +116,26 @@ export default function ScannedInvoicesPage() {
     try {
       const result = await scannerApi.processScannedInvoice(id);
       toast({
-        title: 'Invoice processed',
-        description: `Journal entry #${result.journalEntryId} created`,
+        title: t('scanner.invoiceProcessed'),
+        description: t('scanner.journalEntryCreated', { id: result.journalEntryId }),
         status: 'success',
       });
       loadInvoices();
     } catch (error: any) {
-      toast({ title: error.message || 'Processing error', status: 'error' });
+      toast({ title: error.message || t('scanner.processingError'), status: 'error' });
     } finally {
       setProcessing(null);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this invoice?')) return;
+    if (!confirm(t('modals.confirmations.delete_invoice'))) return;
     try {
       await scannerApi.deleteScannedInvoice(id);
-      toast({ title: 'Invoice deleted', status: 'success' });
+      toast({ title: t('scanner.invoiceDeleted'), status: 'success' });
       loadInvoices();
     } catch (error) {
-      toast({ title: 'Error deleting', status: 'error' });
+      toast({ title: t('scanner.deleteError'), status: 'error' });
     }
   };
 
@@ -146,23 +148,23 @@ export default function ScannedInvoicesPage() {
   };
 
   const getStatusBadge = (status: ScannedInvoiceStatus) => {
-    const config = {
-      PENDING: { color: 'yellow', label: 'Pending' },
-      PROCESSED: { color: 'green', label: 'Processed' },
-      REJECTED: { color: 'red', label: 'Rejected' },
+    const config: Record<string, { color: string; labelKey: string }> = {
+      PENDING: { color: 'yellow', labelKey: 'scanner.pending' },
+      PROCESSED: { color: 'green', labelKey: 'scanner.processed' },
+      REJECTED: { color: 'red', labelKey: 'scanner.rejected' },
     };
-    const { color, label } = config[status] || { color: 'gray', label: status };
-    return <Badge colorScheme={color}>{label}</Badge>;
+    const { color, labelKey } = config[status] || { color: 'gray', labelKey: '' };
+    return <Badge colorScheme={color}>{labelKey ? t(labelKey) : status}</Badge>;
   };
 
   const getDirectionBadge = (direction: InvoiceDirection) => {
-    const config = {
-      PURCHASE: { color: 'blue', label: 'Purchase' },
-      SALE: { color: 'green', label: 'Sale' },
-      UNKNOWN: { color: 'gray', label: 'Unknown' },
+    const config: Record<string, { color: string; labelKey: string }> = {
+      PURCHASE: { color: 'blue', labelKey: 'scanner.purchase' },
+      SALE: { color: 'green', labelKey: 'scanner.sale' },
+      UNKNOWN: { color: 'gray', labelKey: 'scanner.unknown' },
     };
-    const { color, label } = config[direction] || { color: 'gray', label: direction };
-    return <Badge colorScheme={color}>{label}</Badge>;
+    const { color, labelKey } = config[direction] || { color: 'gray', labelKey: '' };
+    return <Badge colorScheme={color}>{labelKey ? t(labelKey) : direction}</Badge>;
   };
 
   const filteredInvoices = invoices.filter(inv => {
@@ -202,8 +204,8 @@ export default function ScannedInvoicesPage() {
       {/* Header */}
       <HStack justify="space-between" mb={6}>
         <Box>
-          <Heading size="lg" mb={1}>Scanned Invoices</Heading>
-          <Text color="gray.500">View and process AI-scanned documents</Text>
+          <Heading size="lg" mb={1}>{t('scanner.title')}</Heading>
+          <Text color="gray.500">{t('scanner.subtitle')}</Text>
         </Box>
         <Button
           as={RouterLink}
@@ -211,29 +213,29 @@ export default function ScannedInvoicesPage() {
           leftIcon={<Icon as={ScanIcon} />}
           colorScheme="brand"
         >
-          Scan New Invoice
+          {t('scanner.scanNew')}
         </Button>
       </HStack>
 
       {/* Stats */}
       <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={6}>
         <Stat bg={cardBg} p={4} borderRadius="xl" borderWidth="1px" borderColor={borderColor}>
-          <StatLabel>Total Invoices</StatLabel>
+          <StatLabel>{t('scanner.totalInvoices')}</StatLabel>
           <StatNumber>{stats.total}</StatNumber>
-          <StatHelpText>{stats.purchases} purchases, {stats.sales} sales</StatHelpText>
+          <StatHelpText>{stats.purchases} {t('scanner.purchases')}, {stats.sales} {t('scanner.sales')}</StatHelpText>
         </Stat>
         <Stat bg="yellow.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="yellow.200">
-          <StatLabel color="yellow.700">Pending</StatLabel>
+          <StatLabel color="yellow.700">{t('scanner.pending')}</StatLabel>
           <StatNumber color="yellow.700">{stats.pending}</StatNumber>
-          <StatHelpText>awaiting processing</StatHelpText>
+          <StatHelpText>{t('scanner.awaitingProcessing')}</StatHelpText>
         </Stat>
         <Stat bg="green.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="green.200">
-          <StatLabel color="green.700">Processed</StatLabel>
+          <StatLabel color="green.700">{t('scanner.processed')}</StatLabel>
           <StatNumber color="green.700">{stats.processed}</StatNumber>
-          <StatHelpText>journal entries created</StatHelpText>
+          <StatHelpText>{t('scanner.journalEntriesCreated')}</StatHelpText>
         </Stat>
         <Stat bg={cardBg} p={4} borderRadius="xl" borderWidth="1px" borderColor={borderColor}>
-          <StatLabel>Total Amount</StatLabel>
+          <StatLabel>{t('scanner.totalAmount')}</StatLabel>
           <StatNumber fontSize="xl">{formatCurrency(stats.totalAmount)}</StatNumber>
         </Stat>
       </SimpleGrid>
@@ -247,7 +249,7 @@ export default function ScannedInvoicesPage() {
                 <Icon as={SearchIcon} color="gray.400" />
               </InputLeftElement>
               <Input
-                placeholder="Search by name, number, VAT..."
+                placeholder={t('scanner.searchPlaceholder')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
@@ -257,19 +259,19 @@ export default function ScannedInvoicesPage() {
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
             >
-              <option value="ALL">All Statuses</option>
-              <option value="PENDING">Pending</option>
-              <option value="PROCESSED">Processed</option>
-              <option value="REJECTED">Rejected</option>
+              <option value="ALL">{t('scanner.allStatuses')}</option>
+              <option value="PENDING">{t('scanner.pending')}</option>
+              <option value="PROCESSED">{t('scanner.processed')}</option>
+              <option value="REJECTED">{t('scanner.rejected')}</option>
             </Select>
             <Select
               maxW="150px"
               value={directionFilter}
               onChange={e => setDirectionFilter(e.target.value as any)}
             >
-              <option value="ALL">All Types</option>
-              <option value="PURCHASE">Purchases</option>
-              <option value="SALE">Sales</option>
+              <option value="ALL">{t('scanner.allTypes')}</option>
+              <option value="PURCHASE">{t('scanner.purchasesFilter')}</option>
+              <option value="SALE">{t('scanner.salesFilter')}</option>
             </Select>
           </HStack>
         </CardBody>
@@ -280,14 +282,14 @@ export default function ScannedInvoicesPage() {
         <Card bg={cardBg}>
           <CardBody py={12}>
             <VStack spacing={4}>
-              <Text fontSize="lg" color="gray.500">No scanned invoices found</Text>
+              <Text fontSize="lg" color="gray.500">{t('scanner.noInvoices')}</Text>
               <Button
                 as={RouterLink}
                 to="/scanner"
                 colorScheme="brand"
                 leftIcon={<Icon as={ScanIcon} />}
               >
-                Scan Your First Invoice
+                {t('scanner.scanFirst')}
               </Button>
             </VStack>
           </CardBody>
@@ -298,12 +300,12 @@ export default function ScannedInvoicesPage() {
             <Table variant="simple">
               <Thead>
                 <Tr>
-                  <Th>Date</Th>
-                  <Th>Document #</Th>
-                  <Th>Type</Th>
-                  <Th>Counterparty</Th>
-                  <Th isNumeric>Amount</Th>
-                  <Th>Status</Th>
+                  <Th>{t('scanner.date')}</Th>
+                  <Th>{t('scanner.documentNumber')}</Th>
+                  <Th>{t('scanner.type')}</Th>
+                  <Th>{t('scanner.counterparty')}</Th>
+                  <Th isNumeric>{t('scanner.amount')}</Th>
+                  <Th>{t('scanner.status')}</Th>
                   <Th w="100px"></Th>
                 </Tr>
               </Thead>
@@ -349,7 +351,7 @@ export default function ScannedInvoicesPage() {
                               onClick={() => handleProcess(invoice.id)}
                               isDisabled={processing === invoice.id}
                             >
-                              {processing === invoice.id ? 'Processing...' : 'Process Invoice'}
+                              {processing === invoice.id ? t('scanner.processing') : t('scanner.processInvoice')}
                             </MenuItem>
                           )}
                           {invoice.journalEntryId && (
@@ -357,7 +359,7 @@ export default function ScannedInvoicesPage() {
                               as={RouterLink}
                               to={`/journal/entries/edit/${invoice.journalEntryId}`}
                             >
-                              View Journal Entry
+                              {t('scanner.viewJournalEntry')}
                             </MenuItem>
                           )}
                           <MenuItem
@@ -365,7 +367,7 @@ export default function ScannedInvoicesPage() {
                             color="red.500"
                             onClick={() => handleDelete(invoice.id)}
                           >
-                            Delete
+                            {t('scanner.delete')}
                           </MenuItem>
                         </MenuList>
                       </Menu>
@@ -382,9 +384,9 @@ export default function ScannedInvoicesPage() {
       <Alert status="info" borderRadius="lg" mt={6}>
         <AlertIcon />
         <Box>
-          <Text fontWeight="medium">How it works</Text>
+          <Text fontWeight="medium">{t('scanner.howItWorks')}</Text>
           <Text fontSize="sm">
-            Scanned invoices are stored for review. Click "Process Invoice" to automatically create a journal entry with the suggested accounts.
+            {t('scanner.howItWorksDesc')}
           </Text>
         </Box>
       </Alert>

@@ -17,7 +17,7 @@ export const scannerApi = {
   },
 
   saveScannedInvoice: async (companyId: number, recognized: RecognizedInvoice, fileName?: string): Promise<ScannedInvoice> => {
-    const response = await api.post('/scanned-invoices', {
+    const response = await api.post('/api/scanned-invoices', {
       companyId,
       recognized: {
         vendorName: recognized.vendorName,
@@ -46,26 +46,26 @@ export const scannerApi = {
   },
 
   getScannedInvoices: async (companyId: number): Promise<ScannedInvoice[]> => {
-    const response = await api.get(`/scanned-invoices?companyId=${companyId}`);
+    const response = await api.get(`/api/scanned-invoices?companyId=${companyId}`);
     return response.data;
   },
 
   getScannedInvoice: async (id: number): Promise<ScannedInvoice> => {
-    const response = await api.get(`/scanned-invoices/${id}`);
+    const response = await api.get(`/api/scanned-invoices/${id}`);
     return response.data;
   },
 
   updateScannedInvoice: async (id: number, data: Partial<ScannedInvoice>): Promise<ScannedInvoice> => {
-    const response = await api.put(`/scanned-invoices/${id}`, data);
+    const response = await api.put(`/api/scanned-invoices/${id}`, data);
     return response.data;
   },
 
   deleteScannedInvoice: async (id: number): Promise<void> => {
-    await api.delete(`/scanned-invoices/${id}`);
+    await api.delete(`/api/scanned-invoices/${id}`);
   },
 
   processScannedInvoice: async (id: number): Promise<{ journalEntryId: number }> => {
-    const response = await api.post(`/scanned-invoices/${id}/process`);
+    const response = await api.post(`/api/scanned-invoices/${id}/process`);
     return response.data;
   },
 };

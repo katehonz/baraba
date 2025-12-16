@@ -29,6 +29,7 @@ import ScannedInvoicesPage from './pages/scanner/ScannedInvoicesPage';
 import VATEntryPage from './pages/vat/VATEntryPage';
 import VatReturnsPage from './pages/vat/VatReturnsPage';
 import MyProfilePage from './pages/profile/MyProfilePage';
+import FixedAssetsPage from './pages/fixed-assets/FixedAssetsPage';
 
 const queryClient = new QueryClient();
 
@@ -90,6 +91,7 @@ function AppRoutes() {
         <Route path="vat/entry" element={<VATEntryPage />} />
         <Route path="vat/entry/:id" element={<VATEntryPage />} />
         <Route path="vat/returns" element={<VatReturnsPage />} />
+        <Route path="fixed-assets" element={<FixedAssetsPage />} />
         <Route path="profile" element={<MyProfilePage />} />
       </Route>
     </Routes>

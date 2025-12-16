@@ -48,6 +48,7 @@ import {
 } from '@chakra-ui/react';
 import { useCompany } from '../../contexts/CompanyContext';
 import { vatReturnsApi } from '../../api/vatReturns';
+import { useTranslation } from 'react-i18next';
 import type { VatReturn, VatReturnDetails } from '../../types';
 
 // Icons
@@ -78,6 +79,7 @@ const TrashIcon = () => (
 const monthNames = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни', 'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември'];
 
 export default function VatReturnsPage() {
+  const { t } = useTranslation();
   const { companyId, currentCompany } = useCompany();
   const toast = useToast();
   const newPeriodModal = useDisclosure();
@@ -123,7 +125,7 @@ export default function VatReturnsPage() {
         setSelectedPeriod({ year: latest.periodYear, month: latest.periodMonth });
       }
     } catch (error) {
-      toast({ title: 'Error loading data', status: 'error' });
+      toast({ title: t('vatReturns.loadError'), status: 'error' });
     } finally {
       setLoading(false);
     }
@@ -135,7 +137,7 @@ export default function VatReturnsPage() {
       const data = await vatReturnsApi.getById(id);
       setDetails(data);
     } catch (error) {
-      toast({ title: 'Error loading details', status: 'error' });
+      toast({ title: t('vatReturns.loadError'), status: 'error' });
     } finally {
       setDetailsLoading(false);
     }
@@ -158,9 +160,9 @@ export default function VatReturnsPage() {
       setSelectedReturn(created);
       setSelectedPeriod({ year: newPeriod.year, month: newPeriod.month });
       newPeriodModal.onClose();
-      toast({ title: 'Period created', status: 'success' });
+      toast({ title: t('vatReturns.periodCreated'), status: 'success' });
     } catch (error: any) {
-      toast({ title: error.message || 'Error generating', status: 'error' });
+      toast({ title: error.message || t('vatReturns.generateError'), status: 'error' });
     } finally {
       setCreating(false);
     }
@@ -168,29 +170,29 @@ export default function VatReturnsPage() {
 
   const handleDelete = async () => {
     if (!selectedReturn) return;
-    if (!confirm('Are you sure you want to delete this return?')) return;
+    if (!confirm(t('modals.confirmations.delete_vat_return'))) return;
     try {
       await vatReturnsApi.delete(selectedReturn.id);
       setSelectedReturn(null);
       setSelectedPeriod(null);
       setDetails(null);
       loadData();
-      toast({ title: 'Deleted', status: 'success' });
+      toast({ title: t('vatReturns.deleted'), status: 'success' });
     } catch (error: any) {
-      toast({ title: error.message || 'Error deleting', status: 'error' });
+      toast({ title: error.message || t('vatReturns.deleteError'), status: 'error' });
     }
   };
 
   const handleSubmit = async () => {
     if (!selectedReturn) return;
-    if (!confirm('Mark this return as submitted?')) return;
+    if (!confirm(t('modals.confirmations.mark_vat_return_submitted'))) return;
     try {
       await vatReturnsApi.submit(selectedReturn.id);
       loadData();
       loadDetails(selectedReturn.id);
-      toast({ title: 'Marked as submitted', status: 'success' });
+      toast({ title: t('vatReturns.markedSubmitted'), status: 'success' });
     } catch (error: any) {
-      toast({ title: error.message || 'Error', status: 'error' });
+      toast({ title: error.message || t('vatReturns.loadError'), status: 'error' });
     }
   };
 
@@ -211,7 +213,7 @@ export default function VatReturnsPage() {
       }
       downloadFile(filename, content);
     } catch (error) {
-      toast({ title: 'Export error', status: 'error' });
+      toast({ title: t('vatReturns.exportError'), status: 'error' });
     }
   };
 
@@ -245,9 +247,9 @@ export default function VatReturnsPage() {
       downloadFile('DEKLAR.TXT', deklar);
       downloadFile('POKUPKI.TXT', pokupki);
       downloadFile('PRODAGBI.TXT', prodajbi);
-      toast({ title: 'Files downloaded', status: 'success' });
+      toast({ title: t('vatReturns.filesDownloaded'), status: 'success' });
     } catch (error) {
-      toast({ title: 'Export error', status: 'error' });
+      toast({ title: t('vatReturns.exportError'), status: 'error' });
     } finally {
       setZipLoading(false);
     }
@@ -259,15 +261,15 @@ export default function VatReturnsPage() {
   const formatDate = (dateStr: string) => dateStr ? new Date(dateStr).toLocaleDateString('bg-BG') : '-';
 
   const getStatusBadge = (status: string) => {
-    const config: Record<string, { color: string; label: string }> = {
-      DRAFT: { color: 'gray', label: 'Draft' },
-      CALCULATED: { color: 'blue', label: 'Calculated' },
-      SUBMITTED: { color: 'green', label: 'Submitted' },
-      ACCEPTED: { color: 'teal', label: 'Accepted' },
-      PAID: { color: 'purple', label: 'Paid' },
+    const config: Record<string, { color: string; labelKey: string }> = {
+      DRAFT: { color: 'gray', labelKey: 'vatReturns.draft' },
+      CALCULATED: { color: 'blue', labelKey: 'vatReturns.calculated' },
+      SUBMITTED: { color: 'green', labelKey: 'vatReturns.submitted' },
+      ACCEPTED: { color: 'teal', labelKey: 'vatReturns.accepted' },
+      PAID: { color: 'purple', labelKey: 'vatReturns.paid' },
     };
-    const { color, label } = config[status] || { color: 'gray', label: status };
-    return <Badge colorScheme={color}>{label}</Badge>;
+    const { color, labelKey } = config[status] || { color: 'gray', labelKey: '' };
+    return <Badge colorScheme={color}>{labelKey ? t(labelKey) : status}</Badge>;
   };
 
   const isEditable = details?.status === 'DRAFT' || details?.status === 'CALCULATED';
@@ -287,10 +289,10 @@ export default function VatReturnsPage() {
         <CardBody py={4}>
           <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
             <HStack spacing={4}>
-              <Heading size="lg">VAT Returns</Heading>
+              <Heading size="lg">{t('vatReturns.title')}</Heading>
             </HStack>
             <HStack spacing={3}>
-              <Text color="gray.500">Tax period:</Text>
+              <Text color="gray.500">{t('vatReturns.taxPeriod')}</Text>
               <Select
                 w="80px"
                 size="sm"
@@ -313,7 +315,7 @@ export default function VatReturnsPage() {
                 })}
               </Select>
               <Button size="sm" colorScheme="orange" variant="outline" onClick={newPeriodModal.onOpen}>
-                New Period
+                {t('vatReturns.newPeriod')}
               </Button>
             </HStack>
           </Flex>
@@ -323,8 +325,8 @@ export default function VatReturnsPage() {
       {!selectedReturn ? (
         <Card bg={cardBg}>
           <CardBody py={12} textAlign="center">
-            <Text color="gray.500" mb={4}>No tax period selected</Text>
-            <Button colorScheme="brand" onClick={newPeriodModal.onOpen}>Create New Period</Button>
+            <Text color="gray.500" mb={4}>{t('vatReturns.noPeriodSelected')}</Text>
+            <Button colorScheme="brand" onClick={newPeriodModal.onOpen}>{t('vatReturns.createNewPeriod')}</Button>
           </CardBody>
         </Card>
       ) : detailsLoading ? (
@@ -334,11 +336,11 @@ export default function VatReturnsPage() {
       ) : details ? (
         <Tabs index={tabIndex} onChange={setTabIndex} variant="enclosed" colorScheme="brand">
           <TabList bg={cardBg} borderBottomWidth="1px" borderColor={borderColor} px={4}>
-            <Tab fontWeight="medium">VAT Summary</Tab>
-            <Tab fontWeight="medium">Purchase Ledger</Tab>
-            <Tab fontWeight="medium">Sales Ledger</Tab>
-            <Tab fontWeight="medium">Declaration</Tab>
-            <Tab fontWeight="medium">VIES</Tab>
+            <Tab fontWeight="medium">{t('vatReturns.vatSummary')}</Tab>
+            <Tab fontWeight="medium">{t('vatReturns.purchaseLedger')}</Tab>
+            <Tab fontWeight="medium">{t('vatReturns.salesLedger')}</Tab>
+            <Tab fontWeight="medium">{t('vatReturns.declaration')}</Tab>
+            <Tab fontWeight="medium">{t('vatReturns.vies')}</Tab>
           </TabList>
 
           <TabPanels>
@@ -350,14 +352,14 @@ export default function VatReturnsPage() {
                   <CardBody>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                       <Box>
-                        <Text fontSize="sm"><Text as="span" color="gray.500">Company:</Text> <Text as="span" fontWeight="bold">{currentCompany?.name}</Text></Text>
-                        <Text fontSize="sm"><Text as="span" color="gray.500">VAT Number:</Text> {currentCompany?.vatNumber}</Text>
-                        <Text fontSize="sm"><Text as="span" color="gray.500">Tax Period:</Text> {selectedPeriod?.month}/{selectedPeriod?.year}</Text>
+                        <Text fontSize="sm"><Text as="span" color="gray.500">{t('vatReturns.company')}</Text> <Text as="span" fontWeight="bold">{currentCompany?.name}</Text></Text>
+                        <Text fontSize="sm"><Text as="span" color="gray.500">{t('vatReturns.vatNumber')}</Text> {currentCompany?.vatNumber}</Text>
+                        <Text fontSize="sm"><Text as="span" color="gray.500">{t('vatReturns.taxPeriod')}</Text> {selectedPeriod?.month}/{selectedPeriod?.year}</Text>
                       </Box>
                       <Box textAlign={{ base: 'left', md: 'right' }}>
-                        <Text fontSize="sm" fontWeight="bold">Tax Office</Text>
-                        <Text fontSize="sm"><Text as="span" color="gray.500">Account:</Text> BG88BNBG96618000195001</Text>
-                        <Text fontSize="sm"><Text as="span" color="gray.500">Payment Code:</Text> 110000</Text>
+                        <Text fontSize="sm" fontWeight="bold">{t('vatReturns.taxOffice')}</Text>
+                        <Text fontSize="sm"><Text as="span" color="gray.500">{t('vatReturns.bankAccount')}</Text> BG88BNBG96618000195001</Text>
+                        <Text fontSize="sm"><Text as="span" color="gray.500">{t('vatReturns.paymentCode')}</Text> 110000</Text>
                       </Box>
                     </SimpleGrid>
                   </CardBody>
@@ -369,17 +371,17 @@ export default function VatReturnsPage() {
                     <Thead bg={hoverBg}>
                       <Tr>
                         <Th>#</Th>
-                        <Th>Ledger</Th>
-                        <Th isNumeric>Records</Th>
-                        <Th isNumeric>Tax Base</Th>
-                        <Th isNumeric>VAT</Th>
-                        <Th isNumeric>Other Bases</Th>
+                        <Th>{t('vatReturns.ledger')}</Th>
+                        <Th isNumeric>{t('vatReturns.records')}</Th>
+                        <Th isNumeric>{t('vatReturns.taxBase')}</Th>
+                        <Th isNumeric>{t('vatReturns.vat')}</Th>
+                        <Th isNumeric>{t('vatReturns.otherBases')}</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
                       <Tr>
                         <Td>1</Td>
-                        <Td fontWeight="medium">Sales</Td>
+                        <Td fontWeight="medium">{t('vatReturns.salesLabel')}</Td>
                         <Td isNumeric>{details.salesDocumentCount}</Td>
                         <Td isNumeric>{formatCurrency(details.salesBase20 + details.salesBase9 + details.salesBaseVop)}</Td>
                         <Td isNumeric>{formatCurrency(details.outputVatAmount)}</Td>
@@ -387,7 +389,7 @@ export default function VatReturnsPage() {
                       </Tr>
                       <Tr>
                         <Td>2</Td>
-                        <Td fontWeight="medium">Purchases</Td>
+                        <Td fontWeight="medium">{t('vatReturns.purchasesLabel')}</Td>
                         <Td isNumeric>{details.purchaseDocumentCount}</Td>
                         <Td isNumeric>{formatCurrency(details.purchaseBaseFullCredit + details.purchaseBasePartialCredit)}</Td>
                         <Td isNumeric>{formatCurrency(details.totalDeductibleVat)}</Td>
@@ -402,13 +404,13 @@ export default function VatReturnsPage() {
                   <CardBody>
                     <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
                       <Box>
-                        <Text color="gray.500" fontSize="sm">Due Date</Text>
+                        <Text color="gray.500" fontSize="sm">{t('vatReturns.dueDate')}</Text>
                         <Text fontSize="lg" fontWeight="bold">{formatDate(details.dueDate)}</Text>
                       </Box>
                       <Box textAlign="right">
-                        <Text fontSize="sm"><Text as="span" color="gray.500">Total Tax Credit:</Text> <Text as="span" fontWeight="bold">{formatCurrency(details.totalDeductibleVat)}</Text></Text>
+                        <Text fontSize="sm"><Text as="span" color="gray.500">{t('vatReturns.totalTaxCredit')}</Text> <Text as="span" fontWeight="bold">{formatCurrency(details.totalDeductibleVat)}</Text></Text>
                         <HStack justify="flex-end" mt={2}>
-                          <Text color="gray.500">{details.vatToPay > 0 ? 'VAT to Pay:' : 'VAT to Refund:'}</Text>
+                          <Text color="gray.500">{details.vatToPay > 0 ? t('vatReturns.vatToPay') : t('vatReturns.vatToRefund')}</Text>
                           <Text
                             fontSize="2xl"
                             fontWeight="bold"
@@ -427,7 +429,7 @@ export default function VatReturnsPage() {
                   <CardBody>
                     <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
                       <HStack>
-                        <Text fontWeight="medium">Status:</Text>
+                        <Text fontWeight="medium">{t('vatReturns.status')}</Text>
                         {getStatusBadge(details.status)}
                       </HStack>
                       <HStack spacing={3}>
@@ -439,7 +441,7 @@ export default function VatReturnsPage() {
                             leftIcon={<Icon as={TrashIcon} />}
                             onClick={handleDelete}
                           >
-                            Delete
+                            {t('vatReturns.deleteBtn')}
                           </Button>
                         )}
                         {details.status === 'CALCULATED' && (
@@ -451,7 +453,7 @@ export default function VatReturnsPage() {
                               onClick={handleGenerateZip}
                               isLoading={zipLoading}
                             >
-                              Export for NAP
+                              {t('vatReturns.exportForNap')}
                             </Button>
                             <Button
                               size="sm"
@@ -459,7 +461,7 @@ export default function VatReturnsPage() {
                               leftIcon={<Icon as={CheckIcon} />}
                               onClick={handleSubmit}
                             >
-                              Mark as Submitted
+                              {t('vatReturns.markAsSubmitted')}
                             </Button>
                           </>
                         )}
@@ -475,14 +477,14 @@ export default function VatReturnsPage() {
               <Card bg={cardBg}>
                 <CardHeader>
                   <Flex justify="space-between" align="center">
-                    <Heading size="md">Purchase Ledger - {selectedPeriod?.month}/{selectedPeriod?.year}</Heading>
+                    <Heading size="md">{t('vatReturns.purchaseLedger')} - {selectedPeriod?.month}/{selectedPeriod?.year}</Heading>
                     <Button
                       size="sm"
                       variant="outline"
                       leftIcon={<Icon as={DownloadIcon} />}
                       onClick={() => handleExport('pokupki')}
                     >
-                      Download
+                      {t('vatReturns.download')}
                     </Button>
                   </Flex>
                 </CardHeader>
@@ -491,24 +493,24 @@ export default function VatReturnsPage() {
                     <Table size="sm">
                       <Thead bg={hoverBg}>
                         <Tr>
-                          <Th>cl.1</Th>
-                          <Th>cl.3 Type</Th>
-                          <Th>cl.4 Doc #</Th>
-                          <Th>cl.5 Date</Th>
-                          <Th>cl.6 VAT #</Th>
-                          <Th>cl.7 Counterparty</Th>
-                          <Th isNumeric>cl.9 No Credit</Th>
-                          <Th isNumeric>cl.10 With Credit</Th>
-                          <Th isNumeric>cl.11 VAT</Th>
+                          <Th>кл.1</Th>
+                          <Th>{t('vatReturns.clType')}</Th>
+                          <Th>{t('vatReturns.clDocNumber')}</Th>
+                          <Th>{t('vatReturns.clDate')}</Th>
+                          <Th>{t('vatReturns.clVatNumber')}</Th>
+                          <Th>{t('vatReturns.clCounterparty')}</Th>
+                          <Th isNumeric>{t('vatReturns.clNoCredit')}</Th>
+                          <Th isNumeric>{t('vatReturns.clWithCredit')}</Th>
+                          <Th isNumeric>{t('vatReturns.clVat')}</Th>
                         </Tr>
                       </Thead>
                       <Tbody>
                         <Tr>
                           <Td colSpan={9} textAlign="center" py={8} color="gray.500">
                             <VStack>
-                              <Text>No purchase documents in this period</Text>
+                              <Text>{t('vatReturns.noPurchaseDocuments')}</Text>
                               <Text fontSize="sm">
-                                Total: {details.purchaseDocumentCount} | Base: {formatCurrency(details.purchaseBaseFullCredit)} | VAT: {formatCurrency(details.purchaseVatFullCredit)}
+                                {t('vatReturns.total')} {details.purchaseDocumentCount} | {t('vatReturns.taxBase')}: {formatCurrency(details.purchaseBaseFullCredit)} | {t('vatReturns.vat')}: {formatCurrency(details.purchaseVatFullCredit)}
                               </Text>
                             </VStack>
                           </Td>
@@ -516,7 +518,7 @@ export default function VatReturnsPage() {
                       </Tbody>
                       <Tfoot bg={hoverBg}>
                         <Tr fontWeight="bold">
-                          <Td colSpan={6} textAlign="right">TOTAL:</Td>
+                          <Td colSpan={6} textAlign="right">{t('vatReturns.total')}</Td>
                           <Td isNumeric>{formatCurrency(details.purchaseBaseNoCredit)}</Td>
                           <Td isNumeric>{formatCurrency(details.purchaseBaseFullCredit)}</Td>
                           <Td isNumeric>{formatCurrency(details.purchaseVatFullCredit)}</Td>
@@ -533,14 +535,14 @@ export default function VatReturnsPage() {
               <Card bg={cardBg}>
                 <CardHeader>
                   <Flex justify="space-between" align="center">
-                    <Heading size="md">Sales Ledger - {selectedPeriod?.month}/{selectedPeriod?.year}</Heading>
+                    <Heading size="md">{t('vatReturns.salesLedger')} - {selectedPeriod?.month}/{selectedPeriod?.year}</Heading>
                     <Button
                       size="sm"
                       variant="outline"
                       leftIcon={<Icon as={DownloadIcon} />}
                       onClick={() => handleExport('prodajbi')}
                     >
-                      Download
+                      {t('vatReturns.download')}
                     </Button>
                   </Flex>
                 </CardHeader>
@@ -549,24 +551,24 @@ export default function VatReturnsPage() {
                     <Table size="sm">
                       <Thead bg={hoverBg}>
                         <Tr>
-                          <Th>cl.1</Th>
-                          <Th>cl.3 Type</Th>
-                          <Th>cl.4 Doc #</Th>
-                          <Th>cl.5 Date</Th>
-                          <Th>cl.6 VAT #</Th>
-                          <Th>cl.7 Counterparty</Th>
-                          <Th isNumeric>cl.9 Base 20%</Th>
-                          <Th isNumeric>cl.10 VAT 20%</Th>
-                          <Th isNumeric>cl.15 ICD</Th>
+                          <Th>кл.1</Th>
+                          <Th>{t('vatReturns.clType')}</Th>
+                          <Th>{t('vatReturns.clDocNumber')}</Th>
+                          <Th>{t('vatReturns.clDate')}</Th>
+                          <Th>{t('vatReturns.clVatNumber')}</Th>
+                          <Th>{t('vatReturns.clCounterparty')}</Th>
+                          <Th isNumeric>{t('vatReturns.clBase20')}</Th>
+                          <Th isNumeric>{t('vatReturns.clVat20')}</Th>
+                          <Th isNumeric>{t('vatReturns.clIcd')}</Th>
                         </Tr>
                       </Thead>
                       <Tbody>
                         <Tr>
                           <Td colSpan={9} textAlign="center" py={8} color="gray.500">
                             <VStack>
-                              <Text>No sales documents in this period</Text>
+                              <Text>{t('vatReturns.noSalesDocuments')}</Text>
                               <Text fontSize="sm">
-                                Total: {details.salesDocumentCount} | Base 20%: {formatCurrency(details.salesBase20)} | VAT: {formatCurrency(details.salesVat20)}
+                                {t('vatReturns.total')} {details.salesDocumentCount} | {t('vatReturns.base20')} {formatCurrency(details.salesBase20)} | {t('vatReturns.vat')}: {formatCurrency(details.salesVat20)}
                               </Text>
                             </VStack>
                           </Td>
@@ -574,7 +576,7 @@ export default function VatReturnsPage() {
                       </Tbody>
                       <Tfoot bg={hoverBg}>
                         <Tr fontWeight="bold">
-                          <Td colSpan={6} textAlign="right">TOTAL:</Td>
+                          <Td colSpan={6} textAlign="right">{t('vatReturns.total')}</Td>
                           <Td isNumeric>{formatCurrency(details.salesBase20)}</Td>
                           <Td isNumeric>{formatCurrency(details.salesVat20)}</Td>
                           <Td isNumeric>{formatCurrency(details.salesBase0Vod)}</Td>
@@ -593,8 +595,8 @@ export default function VatReturnsPage() {
                   <CardHeader>
                     <Flex justify="space-between" align="center">
                       <Box>
-                        <Heading size="md">VAT Declaration</Heading>
-                        <Text fontSize="sm" color="gray.500">Period: {selectedPeriod?.month}/{selectedPeriod?.year}</Text>
+                        <Heading size="md">{t('vatReturns.vatDeclaration')}</Heading>
+                        <Text fontSize="sm" color="gray.500">{t('vatReturns.period')} {selectedPeriod?.month}/{selectedPeriod?.year}</Text>
                       </Box>
                       <Button
                         size="sm"
@@ -611,52 +613,52 @@ export default function VatReturnsPage() {
                 {/* Section A */}
                 <Card bg={cardBg}>
                   <CardHeader borderBottomWidth="1px" borderColor={borderColor}>
-                    <Heading size="sm">Section A: Output VAT</Heading>
+                    <Heading size="sm">{t('vatReturns.sectionA')}</Heading>
                   </CardHeader>
                   <CardBody>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Total tax bases:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.totalTaxBases')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBase20 + details.salesBase9 + details.salesBaseVop)} <Badge size="sm">01</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Total output VAT:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.totalOutputVat')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.outputVatAmount)} <Badge size="sm">20</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Base 20%:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.base20')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBase20)} <Badge size="sm">11</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">VAT 20%:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.vat20')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesVat20)} <Badge size="sm">21</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">ICA Base:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.icaBase')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBaseVop)} <Badge size="sm">12</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">ICA VAT:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.icaVat')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesVatVop)} <Badge size="sm">22</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Base 9%:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.base9')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBase9)} <Badge size="sm">13</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">VAT 9%:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.vat9')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesVat9)} <Badge size="sm">24</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">ICD (0%):</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.icd0')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBase0Vod)} <Badge size="sm">15</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Export (0%):</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.export0')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBase0Export)} <Badge size="sm">16</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Exempt:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.exempt')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.salesBaseExempt)} <Badge size="sm">19</Badge></Text>
                       </Flex>
                     </SimpleGrid>
@@ -666,37 +668,37 @@ export default function VatReturnsPage() {
                 {/* Section B */}
                 <Card bg={cardBg}>
                   <CardHeader borderBottomWidth="1px" borderColor={borderColor}>
-                    <Heading size="sm">Section B: Input VAT (Tax Credit)</Heading>
+                    <Heading size="sm">{t('vatReturns.sectionB')}</Heading>
                   </CardHeader>
                   <CardBody>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Base without credit:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.baseNoCredit')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.purchaseBaseNoCredit)} <Badge size="sm">30</Badge></Text>
                       </Flex>
                       <Box />
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Base with full credit:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.baseFullCredit')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.purchaseBaseFullCredit)} <Badge size="sm">31</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">VAT with full credit:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.vatFullCredit')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.purchaseVatFullCredit)} <Badge size="sm">41</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Base with partial credit:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.basePartialCredit')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.purchaseBasePartialCredit)} <Badge size="sm">32</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">VAT with partial credit:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.vatPartialCredit')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{formatCurrency(details.purchaseVatPartialCredit)} <Badge size="sm">42</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600">Coefficient:</Text>
+                        <Text fontSize="sm" color="gray.600">{t('vatReturns.coefficient')}</Text>
                         <Text fontSize="sm" fontWeight="medium">{details.creditCoefficient?.toFixed(3) || '0.000'} <Badge size="sm">33</Badge></Text>
                       </Flex>
                       <Flex justify="space-between">
-                        <Text fontSize="sm" color="gray.600" fontWeight="bold">Total tax credit:</Text>
+                        <Text fontSize="sm" color="gray.600" fontWeight="bold">{t('vatReturns.totalTaxCreditLabel')}</Text>
                         <Text fontSize="sm" fontWeight="bold">{formatCurrency(details.totalDeductibleVat)} <Badge size="sm">40</Badge></Text>
                       </Flex>
                     </SimpleGrid>
@@ -706,17 +708,17 @@ export default function VatReturnsPage() {
                 {/* Section C */}
                 <Card bg={details.vatToPay > 0 ? 'red.50' : 'green.50'} _dark={{ bg: details.vatToPay > 0 ? 'red.900' : 'green.900' }}>
                   <CardHeader borderBottomWidth="1px" borderColor={borderColor}>
-                    <Heading size="sm">Section C: Result</Heading>
+                    <Heading size="sm">{t('vatReturns.sectionC')}</Heading>
                   </CardHeader>
                   <CardBody>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
                       <Stat>
-                        <StatLabel color="red.600">VAT to Pay (cl.20 - cl.40 &gt; 0)</StatLabel>
+                        <StatLabel color="red.600">{t('vatReturns.vatToPayLabel')}</StatLabel>
                         <StatNumber color="red.600">{formatCurrency(details.vatToPay)}</StatNumber>
                         <StatHelpText><Badge>50</Badge></StatHelpText>
                       </Stat>
                       <Stat>
-                        <StatLabel color="green.600">VAT to Refund (cl.20 - cl.40 &lt; 0)</StatLabel>
+                        <StatLabel color="green.600">{t('vatReturns.vatToRefundLabel')}</StatLabel>
                         <StatNumber color="green.600">{formatCurrency(details.vatToRefund)}</StatNumber>
                         <StatHelpText><Badge>60</Badge></StatHelpText>
                       </Stat>
@@ -730,22 +732,22 @@ export default function VatReturnsPage() {
             <TabPanel px={0}>
               <Card bg={cardBg}>
                 <CardHeader>
-                  <Heading size="md">VIES Declaration - {selectedPeriod?.month}/{selectedPeriod?.year}</Heading>
+                  <Heading size="md">{t('vatReturns.viesDeclaration')} - {selectedPeriod?.month}/{selectedPeriod?.year}</Heading>
                 </CardHeader>
                 <CardBody>
                   <Alert status="info" borderRadius="lg">
                     <AlertIcon />
                     <Box>
-                      <Text fontWeight="bold">VIES Declaration</Text>
+                      <Text fontWeight="bold">{t('vatReturns.viesDeclaration')}</Text>
                       <Text fontSize="sm">
-                        Automatically populated from ICD records in the sales ledger.
-                        Total ICD for period: <Text as="span" fontWeight="bold">{formatCurrency(details.salesBase0Vod)}</Text>
+                        {t('vatReturns.viesInfo')}
+                        {t('vatReturns.totalIcd')} <Text as="span" fontWeight="bold">{formatCurrency(details.salesBase0Vod)}</Text>
                       </Text>
                     </Box>
                   </Alert>
                   <Flex justify="flex-end" mt={4}>
                     <Button variant="outline" isDisabled>
-                      VIES.TXT (Coming soon)
+                      {t('vatReturns.viesComingSoon')}
                     </Button>
                   </Flex>
                 </CardBody>
@@ -759,12 +761,12 @@ export default function VatReturnsPage() {
       <Modal isOpen={newPeriodModal.isOpen} onClose={newPeriodModal.onClose}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>New Tax Period</ModalHeader>
+          <ModalHeader>{t('vatReturns.newTaxPeriod')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <SimpleGrid columns={2} spacing={4}>
               <FormControl>
-                <FormLabel>Year</FormLabel>
+                <FormLabel>{t('vatReturns.year')}</FormLabel>
                 <Select
                   value={newPeriod.year}
                   onChange={e => setNewPeriod(p => ({ ...p, year: parseInt(e.target.value) }))}
@@ -776,7 +778,7 @@ export default function VatReturnsPage() {
                 </Select>
               </FormControl>
               <FormControl>
-                <FormLabel>Month</FormLabel>
+                <FormLabel>{t('vatReturns.month')}</FormLabel>
                 <Select
                   value={newPeriod.month}
                   onChange={e => setNewPeriod(p => ({ ...p, month: parseInt(e.target.value) }))}
@@ -789,9 +791,9 @@ export default function VatReturnsPage() {
             </SimpleGrid>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={newPeriodModal.onClose}>Cancel</Button>
+            <Button variant="ghost" mr={3} onClick={newPeriodModal.onClose}>{t('vatReturns.cancel')}</Button>
             <Button colorScheme="brand" onClick={handleGenerate} isLoading={creating}>
-              Generate
+              {t('vatReturns.generate')}
             </Button>
           </ModalFooter>
         </ModalContent>

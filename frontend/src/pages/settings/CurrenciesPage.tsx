@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Heading,
@@ -37,6 +38,7 @@ import { exchangeRatesApi } from '../../api/exchangeRates';
 import type { Currency, ExchangeRate } from '../../types';
 
 export default function Currencies() {
+  const { t } = useTranslation();
   const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null);
   const [fetchingRates, setFetchingRates] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -83,7 +85,7 @@ export default function Currencies() {
       await exchangeRatesApi.fetchEcbRates();
       fetchData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Грешка при извличане на курсове');
+      alert(err instanceof Error ? err.message : t('currencies.fetchRatesError'));
     } finally {
       setFetchingRates(false);
     }
@@ -94,7 +96,7 @@ export default function Currencies() {
       await currenciesApi.update(currency.id, { isActive: !currency.isActive });
       fetchData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Грешка при промяна на статус');
+      alert(err instanceof Error ? err.message : t('currencies.toggleStatusError'));
     }
   };
 
@@ -104,7 +106,7 @@ export default function Currencies() {
       fetchData();
       onClose();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Грешка при добавяне на валута');
+      alert(err instanceof Error ? err.message : t('currencies.addCurrencyError'));
     }
   };
 
@@ -145,21 +147,21 @@ export default function Currencies() {
       {/* Header */}
       <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
         <Box>
-          <Heading size="lg">Валути и курсове</Heading>
+          <Heading size="lg">{t('currencies.title')}</Heading>
           <Text mt={1} fontSize="sm" color="gray.500">
-            Управление на валути и обменни курсове от ЕЦБ
+            {t('currencies.subtitle')}
           </Text>
         </Box>
         <HStack spacing={2}>
           <Button variant="outline" onClick={onOpen}>
-            + Добави валута
+            {t('currencies.add')}
           </Button>
           <Button
             colorScheme="blue"
             onClick={handleFetchRates}
             isLoading={fetchingRates}
           >
-            Обнови от ЕЦБ
+            {t('currencies.refreshFromECB')}
           </Button>
         </HStack>
       </Flex>
@@ -175,9 +177,9 @@ export default function Currencies() {
       >
         <Text fontSize="2xl" mr={3}>$</Text>
         <Box>
-          <Text fontSize="sm" fontWeight="medium" color="blue.900">Базова валута: EUR</Text>
+          <Text fontSize="sm" fontWeight="medium" color="blue.900">{t('currencies.baseCurrencyLabel')}</Text>
           <Text mt={1} fontSize="sm" color="blue.700">
-            Курсовете се извличат от Европейската централна банка (ЕЦБ) за активните валути.
+            {t('currencies.ecbInfo')}
           </Text>
         </Box>
       </Flex>
@@ -187,15 +189,15 @@ export default function Currencies() {
         <Box bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} overflow="hidden">
           <Tabs>
             <TabList>
-              <Tab flex={1}>Активни ({activeCurrencies.length})</Tab>
-              <Tab flex={1}>Неактивни ({inactiveCurrencies.length})</Tab>
+              <Tab flex={1}>{t('common.active')} ({activeCurrencies.length})</Tab>
+              <Tab flex={1}>{t('common.inactive')} ({inactiveCurrencies.length})</Tab>
             </TabList>
 
             <TabPanels>
               <TabPanel p={4} maxH="500px" overflowY="auto">
                 <VStack spacing={2} align="stretch">
                   {activeCurrencies.length === 0 ? (
-                    <Text textAlign="center" color="gray.500" py={4}>Няма активни валути</Text>
+                    <Text textAlign="center" color="gray.500" py={4}>{t('currencies.noActive')}</Text>
                   ) : (
                     activeCurrencies.map(currency => (
                       <Box
@@ -222,7 +224,7 @@ export default function Currencies() {
                           </HStack>
                           <HStack spacing={2}>
                             {currency.isBaseCurrency && (
-                              <Badge colorScheme="green">Базова</Badge>
+                              <Badge colorScheme="green">{t('currencies.base')}</Badge>
                             )}
                             {!currency.isBaseCurrency && (
                               <Button
@@ -234,7 +236,7 @@ export default function Currencies() {
                                   handleToggleActive(currency);
                                 }}
                               >
-                                Деактивирай
+                                {t('currencies.deactivate')}
                               </Button>
                             )}
                           </HStack>
@@ -248,7 +250,7 @@ export default function Currencies() {
               <TabPanel p={4} maxH="500px" overflowY="auto">
                 <VStack spacing={2} align="stretch">
                   {inactiveCurrencies.length === 0 ? (
-                    <Text textAlign="center" color="gray.500" py={4}>Няма неактивни валути</Text>
+                    <Text textAlign="center" color="gray.500" py={4}>{t('currencies.noInactive')}</Text>
                   ) : (
                     inactiveCurrencies.map(currency => (
                       <Box
@@ -275,7 +277,7 @@ export default function Currencies() {
                             variant="ghost"
                             onClick={() => handleToggleActive(currency)}
                           >
-                            Активирай
+                            {t('currencies.activate')}
                           </Button>
                         </Flex>
                       </Box>
@@ -291,14 +293,14 @@ export default function Currencies() {
         <Box gridColumn={{ xl: 'span 2' }} bg={cardBg} shadow="sm" borderRadius="lg" border="1px" borderColor={borderColor} overflow="hidden">
           <Flex p={4} borderBottom="1px" borderColor={borderColor} justify="space-between" align="center">
             <HStack>
-              <Heading size="md">Обменни курсове</Heading>
+              <Heading size="md">{t('currencies.exchangeRates')}</Heading>
               {selectedCurrency && (
-                <Text fontSize="sm" color="gray.500">(филтрирано по {selectedCurrency})</Text>
+                <Text fontSize="sm" color="gray.500">({t('currencies.filteredBy', { currency: selectedCurrency })})</Text>
               )}
             </HStack>
             {selectedCurrency && (
               <Button size="sm" variant="link" colorScheme="blue" onClick={() => setSelectedCurrency(null)}>
-                Покажи всички
+                {t('currencies.showAll')}
               </Button>
             )}
           </Flex>
@@ -312,18 +314,18 @@ export default function Currencies() {
               <Table size="sm">
                 <Thead bg={tableHeaderBg} position="sticky" top={0}>
                   <Tr>
-                    <Th>От</Th>
-                    <Th>Към</Th>
-                    <Th isNumeric>Курс</Th>
-                    <Th>Дата</Th>
-                    <Th>Източник</Th>
+                    <Th>{t('currencies.from')}</Th>
+                    <Th>{t('currencies.to')}</Th>
+                    <Th isNumeric>{t('currencies.rate')}</Th>
+                    <Th>{t('common.date')}</Th>
+                    <Th>{t('currencies.source')}</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
                   {filteredRates.length === 0 ? (
                     <Tr>
                       <Td colSpan={5} textAlign="center" py={8} color="gray.500">
-                        Няма обменни курсове. Натиснете "Обнови от ЕЦБ".
+                        {t('currencies.noRates')}
                       </Td>
                     </Tr>
                   ) : (
@@ -368,14 +370,14 @@ export default function Currencies() {
         borderRadius="lg"
       >
         <Box>
-          <Heading size="md" color="green.900">Фиксиран курс BGN/EUR</Heading>
+          <Heading size="md" color="green.900">{t('currencies.fixedRateBGNtoEUR')}</Heading>
           <Text mt={1} fontSize="sm" color="green.700">
-            Българският лев е фиксиран към еврото по силата на валутен борд
+            {t('currencies.fixedRateInfo')}
           </Text>
         </Box>
         <Box textAlign="right">
           <Text fontSize="3xl" fontWeight="bold" color="green.800">1.95583</Text>
-          <Text fontSize="sm" color="green.600">BGN за 1 EUR</Text>
+          <Text fontSize="sm" color="green.600">{t('currencies.bgnPerEur')}</Text>
         </Box>
       </Flex>
 
@@ -383,11 +385,11 @@ export default function Currencies() {
       <Modal isOpen={isOpen} onClose={onClose} size="lg">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Добави валута от ЕЦБ</ModalHeader>
+          <ModalHeader>{t('currencies.addFromECB')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Input
-              placeholder="Търси по код или име..."
+              placeholder={t('currencies.searchByCodeOrName')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               mb={4}
@@ -395,7 +397,7 @@ export default function Currencies() {
             <Box maxH="400px" overflowY="auto">
               {filteredAvailable.length === 0 ? (
                 <Text textAlign="center" color="gray.500" py={8}>
-                  {searchTerm ? 'Няма намерени валути' : 'Всички валути от ЕЦБ са добавени'}
+                  {searchTerm ? t('currencies.noneFound') : t('currencies.allECBCurrenciesAdded')}
                 </Text>
               ) : (
                 <VStack spacing={0} align="stretch" divider={<Box borderBottom="1px" borderColor="gray.100" />}>
@@ -423,7 +425,7 @@ export default function Currencies() {
                         colorScheme="blue"
                         onClick={() => handleAddCurrency(currency)}
                       >
-                        Добави
+                        {t('currencies.add')}
                       </Button>
                     </Flex>
                   ))}

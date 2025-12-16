@@ -28,19 +28,13 @@ import {
   useColorModeValue,
   useDisclosure,
 } from '@chakra-ui/react';
+import { useTranslation } from 'react-i18next';
 import { accountsApi } from '../../api/accounts';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Account, AccountType } from '../../types';
 
-const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
-  { value: 'ASSET', label: 'Актив' },
-  { value: 'LIABILITY', label: 'Пасив' },
-  { value: 'EQUITY', label: 'Капитал' },
-  { value: 'REVENUE', label: 'Приход' },
-  { value: 'EXPENSE', label: 'Разход' },
-];
-
 export default function AccountsPage() {
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({ code: '', name: '', accountType: 'ASSET' as AccountType });
@@ -48,6 +42,14 @@ export default function AccountsPage() {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const tableBg = useColorModeValue('white', 'gray.800');
+
+  const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
+    { value: 'ASSET', label: t('accounts.asset') },
+    { value: 'LIABILITY', label: t('accounts.liability') },
+    { value: 'EQUITY', label: t('accounts.equity') },
+    { value: 'REVENUE', label: t('accounts.revenue') },
+    { value: 'EXPENSE', label: t('accounts.expense') },
+  ];
 
   useEffect(() => {
     if (currentCompany) {
@@ -86,7 +88,7 @@ export default function AccountsPage() {
   if (!currentCompany) {
     return (
       <Center h="200px">
-        <Text color="gray.500">Моля, изберете фирма</Text>
+        <Text color="gray.500">{t('accounts.pleaseSelectCompany')}</Text>
       </Center>
     );
   }
@@ -102,34 +104,34 @@ export default function AccountsPage() {
   return (
     <VStack spacing={6} align="stretch">
       <HStack justify="space-between">
-        <Heading size="lg">Сметкоплан</Heading>
-        <Button colorScheme="brand" onClick={onOpen}>Нова сметка</Button>
+        <Heading size="lg">{t('accounts.title')}</Heading>
+        <Button colorScheme="brand" onClick={onOpen}>{t('accounts.create')}</Button>
       </HStack>
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
         <ModalContent>
           <form onSubmit={handleSubmit}>
-            <ModalHeader>Нова сметка</ModalHeader>
+            <ModalHeader>{t('accounts.create')}</ModalHeader>
             <ModalBody>
               <VStack spacing={4}>
                 <FormControl isRequired>
-                  <FormLabel>Код</FormLabel>
+                  <FormLabel>{t('accounts.code')}</FormLabel>
                   <Input
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    placeholder="напр. 401"
+                    placeholder={t('accounts.codePlaceholder')}
                   />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Наименование</FormLabel>
+                  <FormLabel>{t('accounts.name')}</FormLabel>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Тип</FormLabel>
+                  <FormLabel>{t('accounts.type')}</FormLabel>
                   <Select
                     value={formData.accountType}
                     onChange={(e) => setFormData({ ...formData, accountType: e.target.value as AccountType })}
@@ -142,8 +144,8 @@ export default function AccountsPage() {
               </VStack>
             </ModalBody>
             <ModalFooter>
-              <Button variant="ghost" mr={3} onClick={onClose}>Отказ</Button>
-              <Button colorScheme="brand" type="submit">Създай</Button>
+              <Button variant="ghost" mr={3} onClick={onClose}>{t('common.cancel')}</Button>
+              <Button colorScheme="brand" type="submit">{t('common.create')}</Button>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -153,17 +155,17 @@ export default function AccountsPage() {
         <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>Код</Th>
-              <Th>Наименование</Th>
-              <Th>Тип</Th>
-              <Th>Статус</Th>
+              <Th>{t('accounts.code')}</Th>
+              <Th>{t('accounts.name')}</Th>
+              <Th>{t('accounts.type')}</Th>
+              <Th>{t('common.status')}</Th>
             </Tr>
           </Thead>
           <Tbody>
             {accounts.length === 0 ? (
               <Tr>
                 <Td colSpan={4}>
-                  <Text color="gray.500" textAlign="center">Няма сметки</Text>
+                  <Text color="gray.500" textAlign="center">{t('accounts.no_accounts')}</Text>
                 </Td>
               </Tr>
             ) : (
@@ -174,7 +176,7 @@ export default function AccountsPage() {
                   <Td>{ACCOUNT_TYPES.find(t => t.value === account.accountType)?.label}</Td>
                   <Td>
                     <Badge colorScheme={account.isActive ? 'green' : 'gray'}>
-                      {account.isActive ? 'Активна' : 'Неактивна'}
+                      {account.isActive ? t('common.active') : t('common.inactive')}
                     </Badge>
                   </Td>
                 </Tr>
