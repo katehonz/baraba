@@ -23,6 +23,12 @@ import SettingsPage from './pages/settings/SettingsPage';
 import CurrenciesPage from './pages/settings/CurrenciesPage';
 import VatRatesPage from './pages/settings/VatRatesPage';
 import UsersPage from './pages/settings/UsersPage';
+import BanksPage from './pages/banks/BanksPage';
+import DocumentScannerPage from './pages/scanner/DocumentScannerPage';
+import ScannedInvoicesPage from './pages/scanner/ScannedInvoicesPage';
+import VATEntryPage from './pages/vat/VATEntryPage';
+import VatReturnsPage from './pages/vat/VatReturnsPage';
+import MyProfilePage from './pages/profile/MyProfilePage';
 
 const queryClient = new QueryClient();
 
@@ -78,6 +84,13 @@ function AppRoutes() {
         <Route path="settings/currencies" element={<CurrenciesPage />} />
         <Route path="settings/vat-rates" element={<VatRatesPage />} />
         <Route path="settings/users" element={<UsersPage />} />
+        <Route path="banks" element={<BanksPage />} />
+        <Route path="scanner" element={<DocumentScannerPage />} />
+        <Route path="scanner/invoices" element={<ScannedInvoicesPage />} />
+        <Route path="vat/entry" element={<VATEntryPage />} />
+        <Route path="vat/entry/:id" element={<VATEntryPage />} />
+        <Route path="vat/returns" element={<VatReturnsPage />} />
+        <Route path="profile" element={<MyProfilePage />} />
       </Route>
     </Routes>
   );

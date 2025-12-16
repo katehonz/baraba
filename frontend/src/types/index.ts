@@ -222,3 +222,160 @@ export interface VatRate {
   effectiveTo?: string;
   companyId: number;
 }
+
+// Bank types
+export type ConnectionType = 'FILE_IMPORT' | 'SALT_EDGE' | 'MANUAL';
+export type ImportFormat = 'UNICREDIT_MT940' | 'WISE_CAMT053' | 'REVOLUT_CAMT053' | 'PAYSERA_CAMT053' | 'POSTBANK_XML' | 'OBB_XML' | 'CCB_CSV';
+
+export interface BankProfile {
+  id: number;
+  name: string;
+  iban: string;
+  accountId: number;
+  bufferAccountId: number;
+  currencyCode: string;
+  connectionType: ConnectionType;
+  importFormat: ImportFormat;
+  saltEdgeProviderCode: string;
+  saltEdgeProviderName: string;
+  saltEdgeStatus: string;
+  saltEdgeLastSyncAt: string;
+  isActive: boolean;
+  companyId: number;
+}
+
+export interface CreateBankProfileInput {
+  companyId: number;
+  name: string;
+  iban?: string;
+  accountId: number;
+  bufferAccountId: number;
+  currencyCode: string;
+  connectionType: ConnectionType;
+  importFormat?: ImportFormat;
+  saltEdgeProviderCode?: string;
+  isActive: boolean;
+}
+
+export interface SaltEdgeProvider {
+  id: string;
+  code: string;
+  name: string;
+  countryCode: string;
+  logoUrl: string;
+}
+
+// Scanned Invoice types
+export type InvoiceDirection = 'PURCHASE' | 'SALE' | 'UNKNOWN';
+export type ValidationStatus = 'PENDING' | 'VALID' | 'INVALID' | 'NOT_APPLICABLE' | 'MANUAL_REVIEW';
+export type ScannedInvoiceStatus = 'PENDING' | 'PROCESSED' | 'REJECTED';
+
+export interface SuggestedAccounts {
+  counterpartyAccount: { id: number; code: string; name: string } | null;
+  vatAccount: { id: number; code: string; name: string } | null;
+  expenseOrRevenueAccount: { id: number; code: string; name: string } | null;
+}
+
+export interface RecognizedInvoice {
+  vendorName: string;
+  vendorVatNumber: string;
+  vendorAddress: string;
+  customerName: string;
+  customerVatNumber: string;
+  customerAddress: string;
+  invoiceId: string;
+  invoiceDate: string;
+  dueDate: string;
+  subtotal: number;
+  totalTax: number;
+  invoiceTotal: number;
+  direction: InvoiceDirection;
+  validationStatus: ValidationStatus;
+  viesValidationMessage: string;
+  suggestedAccounts: SuggestedAccounts;
+  requiresManualReview: boolean;
+  manualReviewReason: string;
+}
+
+export interface ScannedInvoice {
+  id: number;
+  direction: InvoiceDirection;
+  status: ScannedInvoiceStatus;
+  documentNumber: string;
+  documentDate: string;
+  vendorName: string;
+  vendorVatNumber: string;
+  customerName: string;
+  customerVatNumber: string;
+  subtotal: number;
+  totalTax: number;
+  invoiceTotal: number;
+  validationStatus: ValidationStatus;
+  requiresManualReview: boolean;
+  manualReviewReason: string;
+  fileName: string;
+  counterpartId: number | null;
+  journalEntryId: number | null;
+  companyId: number;
+  createdAt: string;
+}
+
+// VAT Return types
+export type VatReturnStatus = 'DRAFT' | 'CALCULATED' | 'SUBMITTED' | 'ACCEPTED' | 'PAID';
+
+export interface VatReturn {
+  id: number;
+  periodYear: number;
+  periodMonth: number;
+  periodFrom: string;
+  periodTo: string;
+  status: VatReturnStatus;
+  outputVatAmount: number;
+  inputVatAmount: number;
+  vatToPay: number;
+  vatToRefund: number;
+  submittedAt?: string;
+  dueDate: string;
+  salesDocumentCount: number;
+  purchaseDocumentCount: number;
+  companyId: number;
+}
+
+export interface VatReturnDetails extends VatReturn {
+  salesBase20: number;
+  salesVat20: number;
+  salesBase9: number;
+  salesVat9: number;
+  salesBaseVop: number;
+  salesVatVop: number;
+  salesBase0Export: number;
+  salesBase0Vod: number;
+  salesBase0Art3: number;
+  salesBaseArt21: number;
+  salesBaseArt69: number;
+  salesBaseExempt: number;
+  salesVatPersonalUse: number;
+  purchaseBaseFullCredit: number;
+  purchaseVatFullCredit: number;
+  purchaseBasePartialCredit: number;
+  purchaseVatPartialCredit: number;
+  purchaseBaseNoCredit: number;
+  purchaseVatAnnualAdjustment: number;
+  creditCoefficient: number;
+  totalDeductibleVat: number;
+  calculatedAt?: string;
+  effectiveVatToPay: number;
+  vatForDeduction: number;
+  vatRefundArt92: number;
+}
+
+export interface VatDocumentType {
+  code: string;
+  name: string;
+}
+
+export interface VatOperation {
+  code: string;
+  name: string;
+  description: string;
+}
