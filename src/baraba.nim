@@ -58,6 +58,8 @@ router mainRouter:
   options "/api/accounts": resp Http200, corsHeaders, ""
   options "/api/accounts/company/@companyId": resp Http200, corsHeaders, ""
   options "/api/counterparts": resp Http200, corsHeaders, ""
+  options "/api/counterparts/@id": resp Http200, corsHeaders, ""
+  options "/api/counterparts/company/@companyId": resp Http200, corsHeaders, ""
   options "/api/currencies": resp Http200, corsHeaders, ""
   options "/api/currencies/@id": resp Http200, corsHeaders, ""
   options "/api/audit-logs": resp Http200, corsHeaders, ""
@@ -455,6 +457,17 @@ router mainRouter:
         db.select(counterparts, "company_id = $1 ORDER BY name", parseInt(companyId))
       else:
         db.selectAll(counterparts)
+      if counterparts.len == 1 and counterparts[0].id == 0:
+        counterparts = @[]
+      resp Http200, jsonCors, $toJsonArray(counterparts)
+    finally:
+      releaseDbConn(db)
+
+  get "/api/counterparts/company/@companyId":
+    let db = getDbConn()
+    try:
+      var counterparts = @[newCounterpart()]
+      db.select(counterparts, "company_id = $1 ORDER BY name", parseInt(@"companyId"))
       if counterparts.len == 1 and counterparts[0].id == 0:
         counterparts = @[]
       resp Http200, jsonCors, $toJsonArray(counterparts)
@@ -860,14 +873,8 @@ router mainRouter:
     if companyId == 0:
       resp Http400, jsonCors, $(%*{"error": "Missing companyId"})
     else:
-      let db = getDbConn()
-      try:
-        # This is a placeholder. In a real application, you would fetch data
-        # from the database based on the companyId.
-        let data = %*{"companyId": companyId, "returns": []}
-        resp Http200, jsonCors, $data
-      finally:
-        releaseDbConn(db)
+      # Placeholder - returns empty array
+      resp Http200, jsonCors, "[]"
 
   # =====================
   # SCANNER ROUTES

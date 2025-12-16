@@ -3,17 +3,17 @@ import type { VatReturn, VatReturnDetails } from '../types';
 
 export const vatReturnsApi = {
   getByCompany: async (companyId: number): Promise<VatReturn[]> => {
-    const response = await api.get(`/vat-returns?companyId=${companyId}`);
+    const response = await api.get(`/api/vat-returns?companyId=${companyId}`);
     return response.data;
   },
 
   getById: async (id: number): Promise<VatReturnDetails> => {
-    const response = await api.get(`/vat-returns/${id}`);
+    const response = await api.get(`/api/vat-returns/${id}`);
     return response.data;
   },
 
   generate: async (companyId: number, periodYear: number, periodMonth: number): Promise<VatReturn> => {
-    const response = await api.post('/vat-returns/generate', {
+    const response = await api.post('/api/vat-returns/generate', {
       companyId,
       periodYear,
       periodMonth,
@@ -22,31 +22,31 @@ export const vatReturnsApi = {
   },
 
   update: async (id: number, data: Partial<VatReturnDetails>): Promise<VatReturnDetails> => {
-    const response = await api.put(`/vat-returns/${id}`, data);
+    const response = await api.put(`/api/vat-returns/${id}`, data);
     return response.data;
   },
 
   submit: async (id: number): Promise<VatReturn> => {
-    const response = await api.post(`/vat-returns/${id}/submit`);
+    const response = await api.post(`/api/vat-returns/${id}/submit`);
     return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/vat-returns/${id}`);
+    await api.delete(`/api/vat-returns/${id}`);
   },
 
   exportDeklar: async (id: number): Promise<string> => {
-    const response = await api.get(`/vat-returns/${id}/export/deklar`);
+    const response = await api.get(`/api/vat-returns/${id}/export/deklar`);
     return response.data;
   },
 
   exportPokupki: async (id: number): Promise<string> => {
-    const response = await api.get(`/vat-returns/${id}/export/pokupki`);
+    const response = await api.get(`/api/vat-returns/${id}/export/pokupki`);
     return response.data;
   },
 
   exportProdajbi: async (id: number): Promise<string> => {
-    const response = await api.get(`/vat-returns/${id}/export/prodajbi`);
+    const response = await api.get(`/api/vat-returns/${id}/export/prodajbi`);
     return response.data;
   },
 
@@ -56,7 +56,7 @@ export const vatReturnsApi = {
     vatToDate: string,
     type: 'purchase' | 'sales'
   ): Promise<any[]> => {
-    const response = await api.get('/journal-entries', {
+    const response = await api.get('/api/journal-entries', {
       params: {
         companyId,
         vatFromDate,
