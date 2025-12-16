@@ -1,15 +1,21 @@
 # Baraba - Счетоводна програма
 
+![Baraba](baraba-header.jpg)
+
 Минимална счетоводна система, построена с Nim (Jester) backend и React frontend.
 
 ## Технологии
 
 ### Backend
 - **Nim** 2.2.4
-- **Jester** - Web framework
+- **Jester** - Web framework (локален fork с Nim 2.x съвместимост)
+- **httpbeast** - HTTP сървър (локален fork с thread-safety fixes)
 - **norm** - ORM за PostgreSQL
 - **jwt** - JSON Web Token автентикация
 - **nim-graphql** - GraphQL API
+
+> **Забележка:** Проектът използва локални forks на Jester и httpbeast в `src/vendor/`,
+> които включват fixes за Nim 2.x съвместимост и подобрена thread-safety.
 
 ### Frontend
 - **React** 19 + TypeScript
