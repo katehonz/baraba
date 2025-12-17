@@ -451,8 +451,9 @@ proc isNullableTypeCompile(nimType: string): bool {.compileTime.} =
 
 macro createTableSql*(T: typedesc): string =
   ## Generates CREATE TABLE SQL for a model type
-  let typeName = $T
-  let typeImpl = T.getTypeInst()[1].getImpl()
+  let typeInst = T.getTypeInst()[1]
+  let typeName = $typeInst
+  let typeImpl = typeInst.getImpl()
   let recList = typeImpl[2][2]
 
   var columns = newSeq[string]()
@@ -497,9 +498,9 @@ macro createTableSql*(T: typedesc): string =
 
 proc createTable*[T: Model](db: DbConn, _: typedesc[T]) =
   ## Creates a table for the given model type
-  let sql = createTableSql(T)
+  let createSql = createTableSql(T)
   try:
-    exec(db, sql(sql))
+    exec(db, sql(createSql))
     l.success("Created table for " & $T)
   except Exception as e:
     # Table might already exist or other issue

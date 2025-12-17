@@ -6,7 +6,7 @@ import jester
 import asynchttpserver
 import orm/orm
 
-import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile]
+import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log]
 import services/auth
 import db/config
 import utils/json_utils
@@ -475,10 +475,25 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
+      let name = body["name"].getStr()
+      let eik = body.getOrDefault("eik").getStr("")
+      let companyId = body["companyId"].getBiggestInt()
+
+      # Check for duplicate by name or EIK within the same company
+      var existing: seq[Counterpart]
+      if eik != "":
+        existing = findWhere(Counterpart, db, "company_id = $1 AND (name = $2 OR eik = $3)", $companyId, name, eik)
+      else:
+        existing = findWhere(Counterpart, db, "company_id = $1 AND name = $2", $companyId, name)
+
+      if existing.len > 0:
+        resp Http409, jsonCors, $(%*{"error": "Контрагент с това име или ЕИК вече съществува"})
+        return
+
       var counterpart = newCounterpart(
-        name = body["name"].getStr(),
-        eik = body.getOrDefault("eik").getStr(""),
-        company_id = body["companyId"].getBiggestInt()
+        name = name,
+        eik = eik,
+        company_id = companyId
       )
       save(counterpart, db)
       resp Http201, jsonCors, $toJson(counterpart)
@@ -496,6 +511,44 @@ router mainRouter:
         return
       var counterpart = counterpartOpt.get()
       resp Http200, jsonCors, $toJson(counterpart)
+    except:
+      resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  put "/api/counterparts/@id":
+    let id = parseInt(@"id")
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      let counterpartOpt = find(Counterpart, id, db)
+      if counterpartOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Контрагентът не е намерен"})
+        return
+      var counterpart = counterpartOpt.get()
+      if body.hasKey("name"): counterpart.name = body["name"].getStr()
+      if body.hasKey("eik"): counterpart.eik = body["eik"].getStr()
+      if body.hasKey("vatNumber"): counterpart.vat_number = body["vatNumber"].getStr()
+      if body.hasKey("isCustomer"): counterpart.is_customer = body["isCustomer"].getBool()
+      if body.hasKey("isSupplier"): counterpart.is_supplier = body["isSupplier"].getBool()
+      counterpart.updated_at = now()
+      save(counterpart, db)
+      resp Http200, jsonCors, $toJson(counterpart)
+    except:
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
+
+  delete "/api/counterparts/@id":
+    let id = parseInt(@"id")
+    let db = getDbConn()
+    try:
+      let counterpartOpt = find(Counterpart, id, db)
+      if counterpartOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Контрагентът не е намерен"})
+        return
+      deleteById(Counterpart, id, db)
+      resp Http200, jsonCors, $(%*{"success": true, "message": "Контрагентът е изтрит"})
     except:
       resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
     finally:
@@ -1823,6 +1876,30 @@ router mainRouter:
 """
     resp Http200, {"Content-Type": "text/html"}, graphiqlHtml
 
+proc ensureAllTables() =
+  ## Creates all tables if they don't exist (for fresh installations)
+  echo "Checking database schema..."
+  let db = getDbConn()
+  defer: releaseDbConn(db)
+
+  # Create tables in dependency order
+  ensureTable(db, Currency)
+  ensureTable(db, UserGroup)
+  ensureTable(db, User)
+  ensureTable(db, Company)
+  ensureTable(db, Account)
+  ensureTable(db, Counterpart)
+  ensureTable(db, VatRate)
+  ensureTable(db, ExchangeRate)
+  ensureTable(db, FixedAssetCategory)
+  ensureTable(db, FixedAsset)
+  ensureTable(db, DepreciationJournal)
+  ensureTable(db, JournalEntry)
+  ensureTable(db, EntryLine)
+  ensureTable(db, BankProfile)
+  ensureTable(db, AuditLog)
+  echo "Database schema ready"
+
 proc main() =
   # Get port from environment variable or default to 5000
   let portStr = getEnv("PORT", "5000")
@@ -1831,6 +1908,9 @@ proc main() =
   echo "Starting Baraba API server..."
   initDbPool()
   defer: closeDbPool()
+
+  # Auto-create tables for fresh installations
+  ensureAllTables()
 
   # Initialize GraphQL
   echo "Initializing GraphQL..."

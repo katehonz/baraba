@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Heading, Text, Button, Card, CardBody, CardHeader,
-  Table, Thead, Tbody, Tr, Th, Td, Tfoot,
+  Box, Heading, Text, Button, Card, CardBody,
+  Table, Thead, Tbody, Tr, Th, Td,
   Badge, HStack, VStack, SimpleGrid, Spinner, Center,
   Tabs, TabList, TabPanels, Tab, TabPanel,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
@@ -18,13 +18,11 @@ import type { FixedAsset, FixedAssetCategory, CalculatedPeriod, CalculationResul
 
 // Icons
 const AddIcon = () => <span>+</span>;
-const EditIcon = () => <span>&#9998;</span>;
 const TrashIcon = () => <span>&#128465;</span>;
 const RefreshIcon = () => <span>&#8635;</span>;
 const MoreIcon = () => <span>&#8942;</span>;
 const CheckIcon = () => <span>&#10003;</span>;
 const CalculatorIcon = () => <span>&#128425;</span>;
-const BookIcon = () => <span>&#128214;</span>;
 
 export default function FixedAssetsPage() {
   const { t } = useTranslation();

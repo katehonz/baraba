@@ -27,8 +27,18 @@ import {
   TableContainer,
   useColorModeValue,
   useDisclosure,
+  IconButton,
+  useToast,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from '@chakra-ui/react';
+import { EditIcon, DeleteIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
+import { useRef } from 'react';
 import { counterpartsApi } from '../../api/counterparts';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Counterpart } from '../../types';
@@ -36,6 +46,8 @@ import type { Counterpart } from '../../types';
 export default function CounterpartsPage() {
   const [counterparts, setCounterparts] = useState<Counterpart[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     eik: '',
@@ -45,6 +57,9 @@ export default function CounterpartsPage() {
   });
   const { currentCompany } = useCompany();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const toast = useToast();
   const { t } = useTranslation();
 
   const tableBg = useColorModeValue('white', 'gray.800');
@@ -71,16 +86,58 @@ export default function CounterpartsPage() {
     e.preventDefault();
     if (!currentCompany) return;
     try {
-      await counterpartsApi.create({
-        ...formData,
-        companyId: currentCompany.id,
-      });
-      onClose();
-      setFormData({ name: '', eik: '', vatNumber: '', isCustomer: true, isSupplier: false });
+      if (editingId) {
+        await counterpartsApi.update(editingId, formData);
+        toast({ title: 'Контрагентът е обновен', status: 'success', duration: 2000 });
+      } else {
+        await counterpartsApi.create({
+          ...formData,
+          companyId: currentCompany.id,
+        });
+        toast({ title: 'Контрагентът е създаден', status: 'success', duration: 2000 });
+      }
+      handleCloseModal();
+      loadCounterparts();
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || 'Грешка при запазване';
+      toast({ title: errorMsg, status: 'error', duration: 3000 });
+    }
+  };
+
+  const handleEdit = (cp: Counterpart) => {
+    setEditingId(cp.id);
+    setFormData({
+      name: cp.name,
+      eik: cp.eik || '',
+      vatNumber: cp.vatNumber || '',
+      isCustomer: cp.isCustomer,
+      isSupplier: cp.isSupplier
+    });
+    onOpen();
+  };
+
+  const handleDeleteClick = (id: number) => {
+    setDeleteId(id);
+    onDeleteOpen();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await counterpartsApi.delete(deleteId);
+      toast({ title: 'Контрагентът е изтрит', status: 'success', duration: 2000 });
+      onDeleteClose();
+      setDeleteId(null);
       loadCounterparts();
     } catch (error) {
-      console.error('Error creating counterpart:', error);
+      toast({ title: 'Грешка при изтриване', status: 'error', duration: 3000 });
     }
+  };
+
+  const handleCloseModal = () => {
+    onClose();
+    setEditingId(null);
+    setFormData({ name: '', eik: '', vatNumber: '', isCustomer: true, isSupplier: false });
   };
 
   if (!currentCompany) {
@@ -106,11 +163,11 @@ export default function CounterpartsPage() {
         <Button colorScheme="brand" onClick={onOpen}>{t('counterparts.create')}</Button>
       </HStack>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={handleCloseModal}>
         <ModalOverlay />
         <ModalContent>
           <form onSubmit={handleSubmit}>
-            <ModalHeader>{t('counterparts.create')}</ModalHeader>
+            <ModalHeader>{editingId ? 'Редактиране на контрагент' : t('counterparts.create')}</ModalHeader>
             <ModalBody>
               <VStack spacing={4}>
                 <FormControl isRequired>
@@ -151,8 +208,8 @@ export default function CounterpartsPage() {
               </VStack>
             </ModalBody>
             <ModalFooter>
-              <Button variant="ghost" mr={3} onClick={onClose}>{t('counterparts.cancel')}</Button>
-              <Button colorScheme="brand" type="submit">{t('common.create')}</Button>
+              <Button variant="ghost" mr={3} onClick={handleCloseModal}>{t('counterparts.cancel')}</Button>
+              <Button colorScheme="brand" type="submit">{editingId ? 'Запази' : t('common.create')}</Button>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -165,12 +222,13 @@ export default function CounterpartsPage() {
               <Th>{t('counterparts.name')}</Th>
               <Th>{t('counterparts.eik')}</Th>
               <Th>{t('counterparts.type')}</Th>
+              <Th width="100px">Действия</Th>
             </Tr>
           </Thead>
           <Tbody>
             {counterparts.length === 0 ? (
               <Tr>
-                <Td colSpan={3}>
+                <Td colSpan={4}>
                   <Text color="gray.500" textAlign="center">{t('counterparts.no_counterparts')}</Text>
                 </Td>
               </Tr>
@@ -185,12 +243,56 @@ export default function CounterpartsPage() {
                       {cp.isSupplier && <Badge colorScheme="purple">{t('counterparts.supplier')}</Badge>}
                     </HStack>
                   </Td>
+                  <Td>
+                    <HStack spacing={1}>
+                      <IconButton
+                        aria-label="Редактирай"
+                        icon={<EditIcon />}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEdit(cp)}
+                      />
+                      <IconButton
+                        aria-label="Изтрий"
+                        icon={<DeleteIcon />}
+                        size="sm"
+                        variant="ghost"
+                        colorScheme="red"
+                        onClick={() => handleDeleteClick(cp.id)}
+                      />
+                    </HStack>
+                  </Td>
                 </Tr>
               ))
             )}
           </Tbody>
         </Table>
       </TableContainer>
+
+      <AlertDialog
+        isOpen={isDeleteOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onDeleteClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Изтриване на контрагент
+            </AlertDialogHeader>
+            <AlertDialogBody>
+              Сигурни ли сте? Това действие не може да бъде отменено.
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={onDeleteClose}>
+                Отказ
+              </Button>
+              <Button colorScheme="red" onClick={handleDelete} ml={3}>
+                Изтрий
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </VStack>
   );
 }
