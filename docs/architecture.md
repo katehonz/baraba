@@ -367,6 +367,8 @@ proc hashPassword*(password: string): string =
 
 ### JWT Token Structure
 
+Използваме собствена JWT библиотека: https://github.com/katehonz/jwt-nim-baraba
+
 ```json
 {
   "header": {

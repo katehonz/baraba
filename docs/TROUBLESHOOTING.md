@@ -34,9 +34,9 @@ Error: Cannot open file: vendor/nim-graphql/graphql.nim
 **Solution:**
 ```bash
 # Провери пътищата в compilation командата
+# JWT библиотеката се инсталира чрез nimble от https://github.com/katehonz/jwt-nim-baraba
 nim c -d:ssl \
   -p:src/vendor \
-  -p:src/vendor/nim-jwt/src \
   -p:src/vendor/tinypool/src \
   -p:src/vendor/nim-graphql \
   -o:bin/baraba \
@@ -147,7 +147,6 @@ SIGSEGV: Illegal storage access
 # Компилирай с --threads:off
 nim c -d:release --threads:off \
   -p:src/vendor \
-  -p:src/vendor/nim-jwt/src \
   -p:src/vendor/tinypool/src \
   -p:src/vendor/nim-graphql \
   -o:bin/baraba \
@@ -623,7 +622,7 @@ git fetch --tags
 git checkout v1.0.1  # previous stable version
 
 # 3. Rebuild
-nim c -d:release --threads:off -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
+nim c -d:release --threads:off -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
 
 # 4. Restore database ако е нужно
 sudo -u postgres psql jesterac < /var/backups/baraba/db_backup_before_rollback.sql

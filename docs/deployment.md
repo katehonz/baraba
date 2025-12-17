@@ -126,9 +126,9 @@ cd baraba
 git clone git@gitlab.com:balvatar/baraba.git .
 
 # Build backend
+# JWT библиотеката се инсталира чрез nimble от https://github.com/katehonz/jwt-nim-baraba
 nim c -d:release -d:ssl \
   -p:src/vendor \
-  -p:src/vendor/nim-jwt/src \
   -p:src/vendor/tinypool/src \
   -p:src/vendor/nim-graphql \
   -o:bin/baraba \
@@ -137,7 +137,6 @@ nim c -d:release -d:ssl \
 # Build migrate
 nim c -d:ssl \
   -p:src/vendor \
-  -p:src/vendor/nim-jwt/src \
   -p:src/vendor/tinypool/src \
   -p:src/vendor/nim-graphql \
   -o:bin/migrate \
@@ -546,7 +545,6 @@ git pull origin main
 # Build new version
 nim c -d:release -d:ssl \
   -p:src/vendor \
-  -p:src/vendor/nim-jwt/src \
   -p:src/vendor/tinypool/src \
   -p:src/vendor/nim-graphql \
   -o:bin/baraba \

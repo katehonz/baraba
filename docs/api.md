@@ -14,7 +14,7 @@ http://localhost:5000
 
 ## Автентикация
 
-API използва JWT (JSON Web Token) за автентикация. След успешен login/register, получавате token който трябва да изпращате в header:
+API използва JWT (JSON Web Token) за автентикация чрез собствена библиотека ([jwt-nim-baraba](https://github.com/katehonz/jwt-nim-baraba)). След успешен login/register, получавате token който трябва да изпращате в header:
 
 ```
 Authorization: Bearer <token>

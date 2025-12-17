@@ -11,7 +11,7 @@
 - **Jester** - Web framework (локален fork с Nim 2.x съвместимост)
 - **httpbeast** - HTTP сървър (локален fork с thread-safety fixes)
 - **norm** - ORM за PostgreSQL
-- **jwt** - JSON Web Token автентикация
+- **[jwt-nim-baraba](https://github.com/katehonz/jwt-nim-baraba)** - Собствена JWT библиотека
 - **nim-graphql** - GraphQL API
 
 > **Забележка:** Проектът използва локални forks на Jester и httpbeast в `src/vendor/`,
@@ -69,7 +69,7 @@ cd ..
 ### 4. Миграция и seed на базата данни
 
 ```bash
-nim c -d:ssl -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/migrate src/db/migrate.nim
+nim c -d:ssl -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/migrate src/db/migrate.nim
 
 ./bin/migrate
 ```
@@ -84,7 +84,7 @@ nim c -d:ssl -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src 
 
 ```bash
 # Backend
-nim c -d:ssl -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
+nim c -d:ssl -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
 
 ./bin/baraba
 # Сървърът слуша на http://localhost:5000
@@ -99,7 +99,7 @@ npm run dev
 
 ```bash
 # Backend с оптимизации
-nim c -d:release -d:ssl -p:src/vendor -p:src/vendor/nim-jwt/src -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
+nim c -d:release -d:ssl -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
 
 # Frontend build
 cd frontend
@@ -141,7 +141,6 @@ baraba/
 │   ├── utils/
 │   │   └── json_utils.nim  # JSON помощни функции
 │   └── vendor/             # Vendored dependencies
-│       ├── nim-jwt/
 │       ├── nim-graphql/
 │       └── tinypool/
 ├── frontend/
@@ -259,6 +258,8 @@ const
 ```
 
 ### JWT (src/services/auth.nim)
+
+Използваме собствена JWT библиотека: [jwt-nim-baraba](https://github.com/katehonz/jwt-nim-baraba)
 
 ```nim
 const

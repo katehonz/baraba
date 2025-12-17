@@ -88,10 +88,10 @@ nimble install
 
 # Това инсталира:
 # - jester >= 0.6.0          # Web framework
-# - norm >= 2.8.0           # PostgreSQL ORM
-# - jwt >= 0.2              # JWT authentication
-# - nim-graphql             # GraphQL support (vendor)
-# - tinypool                # Connection pool (vendor)
+# - norm >= 2.8.0            # PostgreSQL ORM
+# - jwt (собствена библиотека) # JWT authentication (https://github.com/katehonz/jwt-nim-baraba)
+# - nim-graphql              # GraphQL support (vendor)
+# - tinypool                 # Connection pool (vendor)
 ```
 
 ### 3. Frontend dependencies
