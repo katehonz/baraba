@@ -1,10 +1,22 @@
 ## Baraba - Счетоводна програма
 ## REST API built with Jester + Nim
 
-import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient, os]
+import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient, os, uri, tables]
 import jester
 import asynchttpserver
 import orm/orm
+
+# Helper to parse query string parameters
+proc parseQueryParams(queryString: string): Table[string, string] =
+  result = initTable[string, string]()
+  if queryString.len == 0:
+    return
+  for pair in queryString.split('&'):
+    let parts = pair.split('=', 1)
+    if parts.len == 2:
+      result[decodeUrl(parts[0])] = decodeUrl(parts[1])
+    elif parts.len == 1:
+      result[decodeUrl(parts[0])] = ""
 
 import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log]
 import services/auth
@@ -453,14 +465,17 @@ router mainRouter:
   # COUNTERPART ROUTES
   # =====================
   get "/api/counterparts":
-    let companyId = request.params.getOrDefault("companyId", "0")
+    # Get companyId from query string: /api/counterparts?companyId=1
+    let queryParams = parseQueryParams(request.query)
+    let companyIdStr = queryParams.getOrDefault("companyId", "")
     let db = getDbConn()
     try:
       var counterparts: seq[Counterpart]
-      if companyId != "0":
-        counterparts = findWhere(Counterpart, db, "company_id = $1 ORDER BY name", $(parseInt(companyId)))
+      if companyIdStr != "" and companyIdStr != "0":
+        counterparts = findWhere(Counterpart, db, "company_id = CAST($1 AS BIGINT) ORDER BY name", companyIdStr)
       else:
-        counterparts = findAll(Counterpart, db)
+        # Multi-tenancy: require companyId, return empty if not provided
+        counterparts = @[]
       resp Http200, jsonCors, $toJsonArray(counterparts)
     finally:
       releaseDbConn(db)
