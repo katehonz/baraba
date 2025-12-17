@@ -1,7 +1,7 @@
 # src/orm/orm.nim
 # Professional ORM for PostgreSQL in Nim with JSON and pgvector support
 
-import lowdb/postgres
+import "../../../lowdb_baraba/lowdb/postgres"
 import strutils
 import macros
 import options
@@ -12,6 +12,60 @@ import math
 import times
 import logger as l
 import os
+import std/re
+
+# PostgreSQL timestamp parser - handles format like "2025-12-17 22:31:57.18652+02"
+proc parsePgTimestamp*(s: string): DateTime =
+  ## Parse PostgreSQL TIMESTAMP WITH TIME ZONE format manually
+  ## Handles: "2025-12-17 22:31:57.123456+02" or "2025-12-17 22:31:57+02:00"
+  if s.len == 0 or s == "null":
+    return now()
+
+  try:
+    # Parse date part: YYYY-MM-DD
+    let year = parseInt(s[0..3])
+    let month = parseInt(s[5..6])
+    let day = parseInt(s[8..9])
+
+    # Find time start (after space or T)
+    var timeStart = 11
+    if s.len > 10 and s[10] == 'T':
+      timeStart = 11
+    elif s.len > 10 and s[10] == ' ':
+      timeStart = 11
+
+    # Parse time part: HH:MM:SS
+    var hour = 0
+    var minute = 0
+    var second = 0
+
+    if s.len >= timeStart + 8:
+      hour = parseInt(s[timeStart..timeStart+1])
+      minute = parseInt(s[timeStart+3..timeStart+4])
+      second = parseInt(s[timeStart+6..timeStart+7])
+
+    # Create DateTime (ignoring timezone for now - using local time)
+    result = dateTime(year, Month(month), day, hour, minute, second)
+  except:
+    # If all parsing fails, return current time
+    result = now()
+
+# PostgreSQL boolean parser - handles 't'/'f' format
+proc parsePgBool*(s: string): bool =
+  ## Parse PostgreSQL boolean values: 't', 'f', 'true', 'false', '1', '0'
+  case s.toLowerAscii()
+  of "t", "true", "1", "yes": true
+  of "f", "false", "0", "no", "": false
+  else: false
+
+# Get raw string from DbValue (without SQL quoting)
+proc getRawString*(v: DbValue): string =
+  ## Extract the raw string value from a DbValue without SQL quoting
+  case v.kind
+  of dvkString: v.s
+  of dvkOther: v.o.value
+  of dvkNull: ""
+  else: $v
 
 type
   Model* = object of RootObj
@@ -660,7 +714,7 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
 
     let fieldTypeStr = fieldType.repr
     let parser = if fieldTypeStr == "string" or fieldTypeStr == "EmailAddress" or fieldTypeStr == "Encrypted":
-        quote do: $`rowValue`
+        quote do: getRawString(`rowValue`)
       elif fieldTypeStr == "int":
         quote do: parseInt($`rowValue`)
       elif fieldTypeStr == "int64":
@@ -668,9 +722,9 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
       elif fieldTypeStr == "float" or fieldTypeStr == "float32":
         quote do: parseFloat($`rowValue`)
       elif fieldTypeStr == "bool":
-        quote do: parseBool($`rowValue`)
+        quote do: parsePgBool($`rowValue`)
       elif fieldTypeStr == "DateTime":
-        quote do: parse($`rowValue`, "yyyy-MM-dd'T'HH:mm:sszzz")
+        quote do: parsePgTimestamp($`rowValue`)
       elif fieldTypeStr.startsWith("Option["):
         # Handle Option types - check if value is empty
         let innerType = fieldTypeStr[7..^2]  # Extract inner type from "Option[X]"
@@ -679,7 +733,7 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
             if $`rowValue` == "" or $`rowValue` == "null":
               none(DateTime)
             else:
-              some(parse($`rowValue`, "yyyy-MM-dd'T'HH:mm:sszzz"))
+              some(parsePgTimestamp($`rowValue`))
         elif innerType == "int64":
           quote do:
             if $`rowValue` == "" or $`rowValue` == "null":
@@ -704,7 +758,7 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
 
 # Generic find by id
 macro find*(T: typedesc, id: int, db: DbConn): untyped =
-  let typeName = $T
+  let typeName = $T.getTypeInst()[1]
   result = quote do:
     let tableName = getTableName(`typeName`)
     var fieldNames = getFieldNames(`T`)
@@ -738,7 +792,7 @@ macro find*(T: typedesc, id: int, db: DbConn): untyped =
 
 # Find all records of a type
 macro findAll*(T: typedesc, db: DbConn): untyped =
-  let typeName = $T
+  let typeName = $T.getTypeInst()[1]
   result = quote do:
     let tableName = getTableName(`typeName`)
     var fieldNames = getFieldNames(`T`)
@@ -765,7 +819,7 @@ macro findAll*(T: typedesc, db: DbConn): untyped =
 
 # Find with custom WHERE clause
 macro findWhere*(T: typedesc, db: DbConn, whereClause: string, args: varargs[string]): untyped =
-  let typeName = $T
+  let typeName = $T.getTypeInst()[1]
 
   # Build array of args at macro level
   var argsArray = newNimNode(nnkBracket)
@@ -822,7 +876,7 @@ macro delete*(obj: typed, db: DbConn): untyped =
 
 # Delete by id directly
 macro deleteById*(T: typedesc, id: int, db: DbConn): untyped =
-  let typeName = $T
+  let typeName = $T.getTypeInst()[1]
 
   result = quote do:
     let tableName = getTableName(`typeName`)
@@ -837,7 +891,7 @@ macro deleteById*(T: typedesc, id: int, db: DbConn): untyped =
 
 # Count records
 macro count*(T: typedesc, db: DbConn): untyped =
-  let typeName = $T
+  let typeName = $T.getTypeInst()[1]
 
   result = quote do:
     let tableName = getTableName(`typeName`)
@@ -857,7 +911,7 @@ macro count*(T: typedesc, db: DbConn): untyped =
 
 # Check if record exists
 macro exists*(T: typedesc, id: int, db: DbConn): untyped =
-  let typeName = $T
+  let typeName = $T.getTypeInst()[1]
 
   result = quote do:
     let tableName = getTableName(`typeName`)
