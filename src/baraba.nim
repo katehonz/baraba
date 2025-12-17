@@ -602,10 +602,10 @@ router mainRouter:
     let db = getDbConn()
     try:
       # Fetch ECB rates XML
-      let client = newHttpClient()
+      let client = newHttpClient(timeout = 15000)  # 15 sec timeout
+      defer: client.close()
       let ecbUrl = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
       let xmlContent = client.getContent(ecbUrl)
-      client.close()
 
       # Parse XML
       let xml = parseXml(xmlContent)
@@ -1853,8 +1853,8 @@ proc main() =
     echo "GraphQL ready at /graphql"
 
   echo "http://localhost:", port
-  # Test with single thread to verify functionality
-  let settings = newSettings(port = Port(port), numThreads = 1)
+  # Use all available CPU cores (0 = auto-detect)
+  let settings = newSettings(port = Port(port), numThreads = 0)
   var jester = initJester(mainRouter, settings = settings)
   jester.serve()
 

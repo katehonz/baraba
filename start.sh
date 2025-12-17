@@ -11,7 +11,7 @@ echo "Стартиране на приложението..."
 # Проверка дали backend binary съществува
 if [ ! -f "./bin/baraba" ]; then
     echo "Компилиране на backend..."
-    nim c -d:release --gc:refc -d:ssl -o:bin/baraba src/baraba.nim
+    nim c -d:release --threads:on -d:ssl -o:bin/baraba src/baraba.nim
 fi
 
 # Стартиране на backend

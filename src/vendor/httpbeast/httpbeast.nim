@@ -4,7 +4,33 @@ import options, sugar, logging
 import macros
 import std/atomics
 
-from posix import ENOPROTOOPT
+from posix import ENOPROTOOPT, SIGTERM, SIGINT
+
+# Graceful shutdown support
+var shuttingDown* {.global.}: Atomic[bool]
+var serverSockets {.threadvar.}: seq[Socket]
+
+proc initShutdown*() =
+  ## Initialize shutdown flag (call once at startup)
+  shuttingDown.store(false, moRelaxed)
+
+proc requestShutdown*() =
+  ## Request graceful shutdown of all server threads
+  shuttingDown.store(true, moRelease)
+  echo "Shutdown requested..."
+
+proc isShuttingDown*(): bool =
+  ## Check if shutdown has been requested
+  shuttingDown.load(moAcquire)
+
+proc setupSignalHandlers*() =
+  ## Setup signal handlers for graceful shutdown
+  proc handleSignal(sig: cint) {.noconv.} =
+    echo "\nReceived signal ", sig, ", initiating graceful shutdown..."
+    requestShutdown()
+
+  signal(SIGTERM, handleSignal)
+  signal(SIGINT, handleSignal)
 
 from deques import len
 
@@ -370,6 +396,9 @@ proc eventLoop(
   server.getFd().setBlocking(false)
   selector.registerHandle(server.getFd(), {Event.Read}, initData(Server))
 
+  # Store server socket for graceful shutdown
+  serverSockets.add(server)
+
   let disp = getGlobalDispatcher()
   selector.registerHandle(getIoHandler(disp).getFd(), {Event.Read},
                           initData(Dispatcher))
@@ -379,9 +408,25 @@ proc eventLoop(
   asyncdispatch.addTimer(1000, false, updateDate)
 
   var events: array[64, ReadyKey]
-  while true:
-    let ret = selector.selectInto(-1, events)
-    processEvents(selector, events, ret, onRequest)
+  var serverClosed = false
+
+  while not isShuttingDown() or not serverClosed:
+    # Use timeout to check shutdown flag periodically
+    let ret = selector.selectInto(100, events)  # 100ms timeout
+
+    if isShuttingDown() and not serverClosed:
+      # Close server socket to stop accepting new connections
+      try:
+        selector.unregister(server.getFd())
+        server.close()
+        serverClosed = true
+        if isMainThread:
+          echo "Server socket closed, waiting for active connections..."
+      except:
+        serverClosed = true
+
+    if ret > 0:
+      processEvents(selector, events, ret, onRequest)
 
     # Ensure callbacks list doesn't grow forever in asyncdispatch.
     # See https://github.com/nim-lang/Nim/issues/7532.
@@ -389,6 +434,11 @@ proc eventLoop(
     # lost!
     if unlikely(asyncdispatch.getGlobalDispatcher().callbacks.len > 0):
       asyncdispatch.poll(0)
+
+  # Cleanup
+  if isMainThread:
+    echo "Event loop terminated gracefully"
+  selector.close()
 
 template withRequestData(req: Request, body: untyped) =
   let requestData {.inject.} = addr req.selector.getData(req.client)
@@ -531,6 +581,11 @@ proc run*(onRequest: OnRequest, settings: Settings) =
   ## The ``onRequest`` procedure returns a ``Future[void]`` type. But
   ## unlike most asynchronous procedures in Nim, it can return ``nil``
   ## for better performance, when no async operations are needed.
+
+  # Initialize shutdown flag and signal handlers
+  initShutdown()
+  setupSignalHandlers()
+
   when compileOption("threads"):
     let numThreads =
       if settings.numThreads == 0: countProcessors()
@@ -539,17 +594,26 @@ proc run*(onRequest: OnRequest, settings: Settings) =
     let numThreads = 1
 
   echo("Starting ", numThreads, " threads")
-  if numThreads > 1:
-    when compileOption("threads"):
-      var threads = newSeq[Thread[(OnRequest, Settings, bool)]](numThreads - 1)
+
+  when compileOption("threads"):
+    var threads: seq[Thread[(OnRequest, Settings, bool)]]
+    if numThreads > 1:
+      threads = newSeq[Thread[(OnRequest, Settings, bool)]](numThreads - 1)
       for t in threads.mitems():
         createThread[(OnRequest, Settings, bool)](
           t, eventLoop, (onRequest, settings, false)
         )
-    else:
-      assert false
+
   echo("Listening on port ", settings.port) # This line is used in the tester to signal readiness.
   eventLoop((onRequest, settings, true))
+
+  # Wait for worker threads to finish
+  when compileOption("threads"):
+    if numThreads > 1:
+      echo "Waiting for worker threads to finish..."
+      for t in threads.mitems():
+        joinThread(t)
+      echo "All threads terminated"
 
 proc run*(onRequest: OnRequest) {.inline.} =
   ## Starts the HTTP server with default settings. Calls `onRequest` for each

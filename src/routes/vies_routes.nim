@@ -8,7 +8,8 @@ proc viesRoutes*(): auto =
       if vatNumber.len < 3:
         resp Http400, {"Content-Type": "application/json"}, """{"error": "VAT number too short"}"""
       else:
-        let client = newHttpClient()
+        let client = newHttpClient(timeout = 10000)  # 10 sec timeout
+        defer: client.close()
         let url = "http://ec.europa.eu/taxation_customs/vies/services/checkVatService"
         let body = """
           <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:ec.europa.eu:taxud:vies:services:checkVat:types">
