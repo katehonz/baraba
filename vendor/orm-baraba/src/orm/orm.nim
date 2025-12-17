@@ -628,16 +628,8 @@ macro getFieldNames*(T: typedesc): untyped =
         fieldNames.add(name)
     fieldNames
 
-# Macro to generate field values at compile time
-macro getFieldValues*(obj: typed): untyped =
-  result = quote do:
-    var values: seq[string]
-    for name, val in fieldPairs(`obj`):
-      if name != "id":
-        values.add($val)
-    values
-
 # Generic save procedure - INSERT or UPDATE based on id
+# Builds dbValues directly from field values to preserve types (bool, int, etc.)
 macro save*(obj: typed, db: DbConn): untyped =
   let objType = obj.getTypeInst()
   let typeName = $objType
@@ -645,21 +637,22 @@ macro save*(obj: typed, db: DbConn): untyped =
   result = quote do:
     let tableName = getTableName(`typeName`)
     let fieldNames = getFieldNames(type(`obj`))
-    let fieldValues = getFieldValues(`obj`)
-    
+
+    # Build dbValues directly from object fields to preserve types
+    var dbValues: seq[DbValue]
+    for name, val in fieldPairs(`obj`):
+      if name != "id":
+        dbValues.add(dbValue(val))
+
     if `obj`.id == 0:
       # INSERT - exclude id field (auto-generated)
       let columns = fieldNames.map(toSnakeCase).join(", ")
       let placeholders = toSeq(1..fieldNames.len).map(proc (i: int): string = "$" & $i).join(", ")
       let insertQuery = "INSERT INTO " & tableName & " (" & columns & ") VALUES (" & placeholders & ") RETURNING id"
-      
-      try:
-        var dbValues: seq[DbValue]
-        for val in fieldValues:
-          dbValues.add(dbValue(val))
 
+      try:
         let rowOpt = getRow(db, sql(insertQuery), dbValues)
-        
+
         if rowOpt.isSome:
           let row = rowOpt.get()
           if len($row[0]) > 0:
@@ -674,13 +667,9 @@ macro save*(obj: typed, db: DbConn): untyped =
       for i, name in fieldNames:
         setClauses.add(toSnakeCase(name) & " = $" & $(i + 1))
       let updateQuery = "UPDATE " & tableName & " SET " & setClauses.join(", ") & " WHERE id = $" & $(fieldNames.len + 1)
-      
-      try:
-        var dbValues: seq[DbValue]
-        for val in fieldValues:
-          dbValues.add(dbValue(val))
-        dbValues.add(dbValue(`obj`.id))
 
+      try:
+        dbValues.add(dbValue(`obj`.id))
         exec(db, sql(updateQuery), dbValues)
         echo "Updated ", `typeName`, " with id: ", `obj`.id
       except Exception as e:
