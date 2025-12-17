@@ -1,6 +1,6 @@
 import std/[json, strutils, options, times]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../models/[company, currency]
 import ../db/config
@@ -12,10 +12,7 @@ proc companyRoutes*(): auto =
     get "/api/companies":
       let db = getDbConn()
       try:
-        var companies = @[newCompany()]
-        db.selectAll(companies)
-        if companies.len == 1 and companies[0].id == 0:
-          companies = @[]
+        let companies = findAll(Company, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(companies)
       finally:
         releaseDbConn(db)
@@ -25,11 +22,12 @@ proc companyRoutes*(): auto =
       let companyId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var company = newCompany()
-        db.select(company, "id = $1", companyId)
-        resp Http200, {"Content-Type": "application/json"}, $toJson(company)
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+        let companyOpt = find(Company, companyId, db)
+        if companyOpt.isSome:
+          let company = companyOpt.get()
+          resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
       finally:
         releaseDbConn(db)
 
@@ -39,9 +37,8 @@ proc companyRoutes*(): auto =
       let db = getDbConn()
       try:
         var baseCurrencyId: int64 = 0
-        var currencies = @[newCurrency()]
-        db.select(currencies, "code = $1", "BGN")
-        if currencies.len > 0 and currencies[0].id != 0:
+        let currencies = findWhere(Currency, db, "code = $1", "BGN")
+        if currencies.len > 0:
           baseCurrencyId = currencies[0].id
         var company = newCompany(
           name = body["name"].getStr(),
@@ -51,7 +48,7 @@ proc companyRoutes*(): auto =
           city = body.getOrDefault("city").getStr(""),
           base_currency_id = baseCurrencyId
         )
-        db.insert(company)
+        save(company, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(company)
       except:
         resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
@@ -64,21 +61,21 @@ proc companyRoutes*(): auto =
       let body = parseJson(request.body)
       let db = getDbConn()
       try:
-        var company = newCompany()
-        db.select(company, "id = $1", companyId)
+        var companyOpt = find(Company, companyId, db)
+        if companyOpt.isSome:
+          var company = companyOpt.get()
+          if body.hasKey("name"): company.name = body["name"].getStr()
+          if body.hasKey("vat_number"): company.vat_number = body["vat_number"].getStr()
+          if body.hasKey("address"): company.address = body["address"].getStr()
+          if body.hasKey("city"): company.city = body["city"].getStr()
+          # Note: original file had more fields, but the model in baraba.nim is simpler.
+          # Sticking to the simpler model for now.
+          company.updated_at = now()
 
-        if body.hasKey("name"): company.name = body["name"].getStr()
-        if body.hasKey("vat_number"): company.vat_number = body["vat_number"].getStr()
-        if body.hasKey("address"): company.address = body["address"].getStr()
-        if body.hasKey("city"): company.city = body["city"].getStr()
-        # Note: original file had more fields, but the model in baraba.nim is simpler.
-        # Sticking to the simpler model for now.
-        company.updated_at = now()
-
-        db.update(company)
-        resp Http200, {"Content-Type": "application/json"}, $toJson(company)
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
+          save(company, db)
+          resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
       finally:
         releaseDbConn(db)
 
@@ -87,9 +84,7 @@ proc companyRoutes*(): auto =
       let companyId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var company = newCompany()
-        db.select(company, "id = $1", companyId)
-        db.delete(company)
+        deleteById(Company, companyId, db)
         resp Http200, {"Content-Type": "application/json"}, $(%*{
           "success": true,
           "message": "Фирмата е изтрита"

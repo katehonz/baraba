@@ -1,9 +1,9 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import company, counterpart, user, account, vatrate
 
 type
-  JournalEntry* = ref object of Model
+  JournalEntry* = object of Model
     entry_number*: int
     document_date*: DateTime
     vat_date*: Option[DateTime]
@@ -20,15 +20,15 @@ type
     vat_additional_operation*: string
     vat_additional_data*: string
     vat_rate*: float
-    company_id* {.fk: Company.}: int64
+    company_id*: int64
     counterpart_id*: Option[int64]
     posted_by_id*: Option[int64]
-    created_by_id* {.fk: User.}: int64
+    created_by_id*: int64
     posted_at*: Option[DateTime]
     created_at*: DateTime
     updated_at*: DateTime
 
-  EntryLine* = ref object of Model
+  EntryLine* = object of Model
     debit_amount*: float
     credit_amount*: float
     currency_code*: string
@@ -40,8 +40,8 @@ type
     unit_of_measure_code*: string
     description*: string
     line_order*: int
-    journal_entry_id* {.fk: JournalEntry.}: int64
-    account_id* {.fk: Account.}: int64
+    journal_entry_id*: int64
+    account_id*: int64
     counterpart_id*: Option[int64]
     vat_rate_id*: Option[int64]
     created_at*: DateTime
@@ -59,6 +59,7 @@ proc newJournalEntry*(
   created_by_id: int64 = 0
 ): JournalEntry =
   JournalEntry(
+    id: 0,
     entry_number: entry_number,
     document_date: document_date,
     vat_date: none(DateTime),
@@ -94,6 +95,7 @@ proc newEntryLine*(
   account_id: int64 = 0
 ): EntryLine =
   EntryLine(
+    id: 0,
     debit_amount: debit_amount,
     credit_amount: credit_amount,
     currency_code: currency_code,

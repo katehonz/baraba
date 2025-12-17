@@ -1,6 +1,6 @@
 import std/[json, strutils]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../db/config
 import ../models/fixed_asset_category
@@ -12,13 +12,11 @@ proc fixedAssetCategoryRoutes*(): auto =
       let companyId = request.params.getOrDefault("companyId", "0").parseInt
       let db = getDbConn()
       try:
-        var categories = @[newFixedAssetCategory()]
+        var categories: seq[FixedAssetCategory]
         if companyId > 0:
-          db.select(categories, "company_id = $1", companyId)
+          categories = findWhere(FixedAssetCategory, db, "company_id = $1", $companyId)
         else:
-          db.selectAll(categories)
-        if categories.len == 1 and categories[0].id == 0:
-          categories = @[]
+          categories = findAll(FixedAssetCategory, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(categories)
       finally:
         releaseDbConn(db)

@@ -1,6 +1,6 @@
 import std/[json, strutils, times, options, math]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../db/config
 import ../models/[fixed_asset, fixed_asset_category, depreciation_journal, journal]
@@ -14,16 +14,14 @@ proc fixedAssetRoutes*(): auto =
       let status = request.params.getOrDefault("status", "")
       let db = getDbConn()
       try:
-        var assets = @[newFixedAsset()]
+        var assets: seq[FixedAsset]
         if companyId > 0:
           if status != "":
-            db.select(assets, "company_id = $1 AND status = $2", companyId, status)
+            assets = findWhere(FixedAsset, db, "company_id = $1 AND status = $2", $companyId, status)
           else:
-            db.select(assets, "company_id = $1", companyId)
+            assets = findWhere(FixedAsset, db, "company_id = $1", $companyId)
         else:
-          db.selectAll(assets)
-        if assets.len == 1 and assets[0].id == 0:
-          assets = @[]
+          assets = findAll(FixedAsset, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(assets)
       finally:
         releaseDbConn(db)
@@ -33,12 +31,12 @@ proc fixedAssetRoutes*(): auto =
       let id = @"id".parseInt
       let db = getDbConn()
       try:
-        var asset = newFixedAsset()
-        db.select(asset, "id = $1", id)
-        if asset.id == 0:
-          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
-        else:
+        let assetOpt = find(FixedAsset, id, db)
+        if assetOpt.isSome:
+          let asset = assetOpt.get()
           resp Http200, {"Content-Type": "application/json"}, $toJson(asset)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
       finally:
         releaseDbConn(db)
 
@@ -48,9 +46,9 @@ proc fixedAssetRoutes*(): auto =
       let db = getDbConn()
       try:
         # Get category to set default rates
-        var category = newFixedAssetCategory()
         let categoryId = body["categoryId"].getInt
-        db.select(category, "id = $1", categoryId)
+        let categoryOpt = find(FixedAssetCategory, categoryId, db)
+        let category = if categoryOpt.isSome: categoryOpt.get() else: newFixedAssetCategory()
 
         let acquisitionCost = body["acquisitionCost"].getFloat
 
@@ -80,7 +78,7 @@ proc fixedAssetRoutes*(): auto =
         asset.accounting_book_value = acquisitionCost
         asset.tax_book_value = acquisitionCost
 
-        db.insert(asset)
+        save(asset, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(asset)
       except CatchableError as e:
         resp Http400, {"Content-Type": "application/json"}, """{"error": """ & $(%e.msg) & "}"
@@ -93,11 +91,9 @@ proc fixedAssetRoutes*(): auto =
       let body = parseJson(request.body)
       let db = getDbConn()
       try:
-        var asset = newFixedAsset()
-        db.select(asset, "id = $1", id)
-        if asset.id == 0:
-          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
-        else:
+        var assetOpt = find(FixedAsset, id, db)
+        if assetOpt.isSome:
+          var asset = assetOpt.get()
           if body.hasKey("name"):
             asset.name = body["name"].getStr
           if body.hasKey("description"):
@@ -110,8 +106,10 @@ proc fixedAssetRoutes*(): auto =
             asset.tax_depreciation_rate = body["taxDepreciationRate"].getFloat
 
           asset.updated_at = now()
-          db.update(asset)
+          save(asset, db)
           resp Http200, {"Content-Type": "application/json"}, $toJson(asset)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
       finally:
         releaseDbConn(db)
 
@@ -120,13 +118,15 @@ proc fixedAssetRoutes*(): auto =
       let id = @"id".parseInt
       let db = getDbConn()
       try:
-        var asset = newFixedAsset()
-        db.select(asset, "id = $1", id)
-        if asset.id == 0:
+        let assetOpt = find(FixedAsset, id, db)
+        if assetOpt.isNone:
           resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
-        else:
-          db.delete(asset)
-          resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+          return
+
+        deleteById(FixedAsset, id, db)
+        resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+      except:
+        resp Http500, {"Content-Type": "application/json"}, """{"error": "Internal server error"}"""
       finally:
         releaseDbConn(db)
 
@@ -139,22 +139,18 @@ proc fixedAssetRoutes*(): auto =
       let db = getDbConn()
       try:
         # Get all active assets
-        var assets = @[newFixedAsset()]
-        db.select(assets, "company_id = $1 AND status = $2", companyId, "ACTIVE")
-        if assets.len == 1 and assets[0].id == 0:
-          assets = @[]
+        var assets = findWhere(FixedAsset, db, "company_id = $1 AND status = $2", $companyId, "ACTIVE")
 
         var calculated: seq[JsonNode] = @[]
         var totalAccountingAmount = 0.0
         var totalTaxAmount = 0.0
         var errors: seq[JsonNode] = @[]
 
-        for asset in assets:
+        for asset in assets.mitems:
           # Check if already calculated for this period
-          var existing = @[newDepreciationJournal()]
-          db.select(existing, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
-                    asset.id, year, month)
-          if existing.len > 0 and existing[0].id > 0:
+          let existing = findWhere(DepreciationJournal, db, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
+                    $asset.id, $year, $month)
+          if existing.len > 0:
             continue  # Already calculated
 
           # Calculate monthly depreciation
@@ -186,7 +182,7 @@ proc fixedAssetRoutes*(): auto =
             tax_book_value_before = asset.tax_book_value,
             tax_book_value_after = asset.tax_book_value - taxDepreciation
           )
-          db.insert(journal)
+          save(journal, db)
 
           # Update asset book values
           asset.accounting_accumulated_depreciation += accountingDepreciation
@@ -200,7 +196,7 @@ proc fixedAssetRoutes*(): auto =
           if asset.accounting_book_value <= asset.residual_value:
             asset.status = "DEPRECIATED"
 
-          db.update(asset)
+          save(asset, db)
 
           totalAccountingAmount += accountingDepreciation
           totalTaxAmount += taxDepreciation
@@ -232,11 +228,8 @@ proc fixedAssetRoutes*(): auto =
       let db = getDbConn()
       try:
         # Get unposted depreciation entries for this period
-        var entries = @[newDepreciationJournal()]
-        db.select(entries, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
-                  companyId, year, month, false)
-        if entries.len == 1 and entries[0].id == 0:
-          entries = @[]
+        var entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
+                  $companyId, $year, $month, "false")
 
         if entries.len == 0:
           resp Http400, {"Content-Type": "application/json"}, """{"error": "No unposted depreciation entries found"}"""
@@ -253,16 +246,15 @@ proc fixedAssetRoutes*(): auto =
           document_number = "АМОР-" & $year & "-" & $month,
           total_amount = totalAmount
         )
-        db.insert(journalEntry)
+        save(journalEntry, db)
 
         # Mark depreciation entries as posted
-        for entry in entries:
-          var e = entry
-          e.is_posted = true
-          e.journal_entry_id = some(journalEntry.id)
-          e.posted_at = some(now())
-          e.updated_at = now()
-          db.update(e)
+        for entry in entries.mitems:
+          entry.is_posted = true
+          entry.journal_entry_id = some(journalEntry.id)
+          entry.posted_at = some(now())
+          entry.updated_at = now()
+          save(entry, db)
 
         resp Http200, {"Content-Type": "application/json"}, $(%*{
           "journalEntryId": journalEntry.id,
@@ -281,20 +273,18 @@ proc fixedAssetRoutes*(): auto =
       let month = request.params.getOrDefault("month", "")
       let db = getDbConn()
       try:
-        var entries = @[newDepreciationJournal()]
+        var entries: seq[DepreciationJournal]
         if month != "":
-          db.select(entries, "company_id = $1 AND period_year = $2 AND period_month = $3",
-                    companyId, year, month.parseInt)
+          entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3",
+                    $companyId, $year, month)
         else:
-          db.select(entries, "company_id = $1 AND period_year = $2", companyId, year)
-        if entries.len == 1 and entries[0].id == 0:
-          entries = @[]
+          entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2", $companyId, $year)
 
         # Enrich with asset names
         var result: seq[JsonNode] = @[]
         for entry in entries:
-          var asset = newFixedAsset()
-          db.select(asset, "id = $1", entry.fixed_asset_id)
+          let assetOpt = find(FixedAsset, entry.fixed_asset_id.int, db)
+          let asset = if assetOpt.isSome: assetOpt.get() else: newFixedAsset()
           result.add(%*{
             "id": entry.id,
             "fixedAssetId": entry.fixed_asset_id,
@@ -322,17 +312,17 @@ proc fixedAssetRoutes*(): auto =
       let db = getDbConn()
       try:
         # Raw SQL query to get distinct periods with aggregations
-        let rows = db.getAllRows(sql"""
+        let rows = rawQuery(db, """
           SELECT period_year, period_month,
                  bool_and(is_posted) as all_posted,
                  SUM(accounting_depreciation_amount) as total_accounting,
                  SUM(tax_depreciation_amount) as total_tax,
                  COUNT(*) as assets_count
           FROM depreciation_journal
-          WHERE company_id = ?
+          WHERE company_id = $1
           GROUP BY period_year, period_month
           ORDER BY period_year DESC, period_month DESC
-        """, companyId)
+        """, $companyId)
 
         var result: seq[JsonNode] = @[]
         for row in rows:

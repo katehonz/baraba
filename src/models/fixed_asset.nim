@@ -1,5 +1,5 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import company, fixed_asset_category
 
 type
@@ -13,12 +13,12 @@ type
     dmLinear = "LINEAR"
     dmDecliningBalance = "DECLINING_BALANCE"
 
-  FixedAsset* = ref object of Model
+  FixedAsset* = object of Model
     name*: string
     inventory_number*: string
     description*: string
-    category_id* {.fk: FixedAssetCategory.}: int64
-    company_id* {.fk: Company.}: int64
+    category_id*: int64
+    company_id*: int64
     acquisition_date*: DateTime
     acquisition_cost*: float
     residual_value*: float
@@ -57,6 +57,7 @@ proc newFixedAsset*(
   tax_depreciation_rate: float = 0.0
 ): FixedAsset =
   FixedAsset(
+    id: 0,
     name: name,
     inventory_number: inventory_number,
     description: description,

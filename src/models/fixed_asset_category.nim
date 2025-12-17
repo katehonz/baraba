@@ -1,14 +1,14 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import company
 
 type
-  FixedAssetCategory* = ref object of Model
+  FixedAssetCategory* = object of Model
     name*: string
     description*: string
     min_depreciation_rate*: float
     max_depreciation_rate*: float
-    company_id* {.fk: Company.}: int64
+    company_id*: int64
     created_at*: DateTime
     updated_at*: DateTime
 
@@ -20,6 +20,7 @@ proc newFixedAssetCategory*(
   company_id: int64 = 0
 ): FixedAssetCategory =
   FixedAssetCategory(
+    id: 0,
     name: name,
     description: description,
     min_depreciation_rate: min_depreciation_rate,

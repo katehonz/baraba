@@ -1,6 +1,6 @@
 import std/[json, strutils, options, times]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../models/account
 import ../db/config
@@ -13,37 +13,30 @@ proc accountRoutes*(): auto =
       let companyId = request.params.getOrDefault("companyId", "0")
       let db = getDbConn()
       try:
-        var accounts = @[newAccount()]
+        var accounts: seq[Account]
         if companyId != "0":
-          db.select(accounts, "company_id = $1 ORDER BY code", parseInt(companyId))
+          accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", companyId)
         else:
-          db.selectAll(accounts)
-        if accounts.len == 1 and accounts[0].id == 0:
-          accounts = @[]
+          accounts = findAll(Account, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
       finally:
         releaseDbConn(db)
 
     get "/api/accounts/company/@companyId":
-      let companyId = parseInt(@"companyId")
+      let companyId = @"companyId"
       let db = getDbConn()
       try:
-        var accounts = @[newAccount()]
-        db.select(accounts, "company_id = $1 ORDER BY code", companyId)
-        if accounts.len == 1 and accounts[0].id == 0:
-          accounts = @[]
+        let accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", companyId)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
       finally:
         releaseDbConn(db)
     
     # This is a new route from the original account_routes.nim
     get "/api/accounts/analytical/@companyId":
-      let companyId = parseInt(@"companyId")
+      let companyId = @"companyId"
       let db = getDbConn()
       try:
-        var accounts: seq[Account] = @[]
-        # Assuming is_analytical field exists based on original file
-        db.select(accounts, "company_id = $1 AND is_analytical = true ORDER BY code", companyId)
+        let accounts = findWhere(Account, db, "company_id = $1 AND is_analytical = true ORDER BY code", companyId)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
       finally:
         releaseDbConn(db)
@@ -52,11 +45,12 @@ proc accountRoutes*(): auto =
       let accountId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var account = newAccount()
-        db.select(account, "id = $1", accountId)
-        resp Http200, {"Content-Type": "application/json"}, $toJson(account)
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
+        let accountOpt = find(Account, accountId, db)
+        if accountOpt.isSome:
+          let account = accountOpt.get()
+          resp Http200, {"Content-Type": "application/json"}, $toJson(account)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
       finally:
         releaseDbConn(db)
 
@@ -75,7 +69,7 @@ proc accountRoutes*(): auto =
           company_id = body["companyId"].getBiggestInt(),
           parent_id = parentId
         )
-        db.insert(account)
+        save(account, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(account)
       except:
         resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
@@ -88,17 +82,17 @@ proc accountRoutes*(): auto =
       let body = parseJson(request.body)
       let db = getDbConn()
       try:
-        var account = newAccount()
-        db.select(account, "id = $1", accountId)
+        var accountOpt = find(Account, accountId, db)
+        if accountOpt.isSome:
+          var account = accountOpt.get()
+          if body.hasKey("name"): account.name = body["name"].getStr()
+          if body.hasKey("account_type"): account.account_type = body.getOrDefault("accountType").getStr(account.account_type)
+          account.updated_at = now()
 
-        if body.hasKey("name"): account.name = body["name"].getStr()
-        if body.hasKey("account_type"): account.account_type = body.getOrDefault("accountType").getStr(account.account_type)
-        account.updated_at = now()
-
-        db.update(account)
-        resp Http200, {"Content-Type": "application/json"}, $toJson(account)
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
+          save(account, db)
+          resp Http200, {"Content-Type": "application/json"}, $toJson(account)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
       finally:
         releaseDbConn(db)
 
@@ -107,9 +101,7 @@ proc accountRoutes*(): auto =
       let accountId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var account = newAccount()
-        db.select(account, "id = $1", accountId)
-        db.delete(account)
+        deleteById(Account, accountId, db)
         resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true, "message": "Сметката е изтрита"})
       except:
         resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})

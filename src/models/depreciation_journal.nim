@@ -1,11 +1,11 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import company, fixed_asset, journal
 
 type
-  DepreciationJournal* = ref object of Model
-    fixed_asset_id* {.fk: FixedAsset.}: int64
-    company_id* {.fk: Company.}: int64
+  DepreciationJournal* = object of Model
+    fixed_asset_id*: int64
+    company_id*: int64
     period_year*: int
     period_month*: int
     accounting_depreciation_amount*: float
@@ -33,6 +33,7 @@ proc newDepreciationJournal*(
   tax_book_value_after: float = 0.0
 ): DepreciationJournal =
   DepreciationJournal(
+    id: 0,
     fixed_asset_id: fixed_asset_id,
     company_id: company_id,
     period_year: period_year,

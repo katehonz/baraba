@@ -4,7 +4,7 @@
 import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient, os]
 import jester
 import asynchttpserver
-import norm/postgres
+import orm/orm
 
 import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile]
 import services/auth
@@ -246,10 +246,7 @@ router mainRouter:
   get "/api/companies":
     let db = getDbConn()
     try:
-      var companies = @[newCompany()]
-      db.selectAll(companies)
-      if companies.len == 1 and companies[0].id == 0:
-        companies = @[]
+      let companies = findAll(Company, db)
       resp Http200, jsonCors, $toJsonArray(companies)
     finally:
       releaseDbConn(db)
@@ -258,9 +255,11 @@ router mainRouter:
     let companyId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var company = newCompany()
-      db.select(company, "id = $1", companyId)
-      
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, jsonCors, """{"error": "Company not found"}"""
+        return
+      let company = companyOpt.get()
       var companyJson = toJson(company)
       let fields = [
         ("defaultCashAccountId", "defaultCashAccount"),
@@ -277,7 +276,9 @@ router mainRouter:
         let accountIdOpt = company.getAccountId(field)
         if accountIdOpt.isSome:
           var account = newAccount()
-          db.select(account, "id = $1", accountIdOpt.get)
+          let accountOpt2 = find(Account, accountIdOpt.get.int, db)
+          if accountOpt2.isSome:
+            var account = accountOpt2.get()
           companyJson[jsonField] = toJson(account)
         else:
           companyJson[jsonField] = %*{}
@@ -293,9 +294,8 @@ router mainRouter:
     let db = getDbConn()
     try:
       var baseCurrencyId: int64 = 0
-      var currencies = @[newCurrency()]
-      db.select(currencies, "code = $1", "BGN")
-      if currencies.len > 0 and currencies[0].id != 0:
+      let currencies = findWhere(Currency, db, "code = $1", "BGN")
+      if currencies.len > 0:
         baseCurrencyId = currencies[0].id
       var company = newCompany(
         name = body["name"].getStr(),
@@ -305,7 +305,7 @@ router mainRouter:
         city = body.getOrDefault("city").getStr(""),
         base_currency_id = baseCurrencyId
       )
-      db.insert(company)
+      save(company, db)
       resp Http201, jsonCors, $toJson(company)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -317,14 +317,17 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var company = newCompany()
-      db.select(company, "id = $1", companyId)
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, jsonCors, """{"error": "Фирмата не е намерена"}"""
+        return
+      var company = companyOpt.get()
       if body.hasKey("name"): company.name = body["name"].getStr()
       if body.hasKey("vatNumber"): company.vat_number = body["vatNumber"].getStr()
       if body.hasKey("address"): company.address = body["address"].getStr()
       if body.hasKey("city"): company.city = body["city"].getStr()
       company.updated_at = now()
-      db.update(company)
+      save(company, db)
       resp Http200, jsonCors, $toJson(company)
     except:
       resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
@@ -336,8 +339,11 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var company = newCompany()
-      db.select(company, "id = $1", companyId)
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, jsonCors, """{"error": "Фирмата не е намерена"}"""
+        return
+      var company = companyOpt.get()
 
       let fields = [
         "defaultCashAccountId",
@@ -358,7 +364,7 @@ router mainRouter:
             company.setAccountId(field, some(body[field].getInt().int64))
       
       company.updated_at = now()
-      db.update(company)
+      save(company, db)
       resp Http200, jsonCors, $toJson(company)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -369,9 +375,12 @@ router mainRouter:
     let companyId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var company = newCompany()
-      db.select(company, "id = $1", companyId)
-      db.delete(company)
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, jsonCors, """{"error": "Фирмата не е намерена"}"""
+        return
+      var company = companyOpt.get()
+      delete(company, db)
       resp Http200, jsonCors, $(%*{"success": true})
     except:
       resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
@@ -385,13 +394,11 @@ router mainRouter:
     let companyId = request.params.getOrDefault("companyId", "0")
     let db = getDbConn()
     try:
-      var accounts = @[newAccount()]
+      var accounts: seq[Account]
       if companyId != "0":
-        db.select(accounts, "company_id = $1 ORDER BY code", parseInt(companyId))
+        accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $(parseInt(companyId)))
       else:
-        db.selectAll(accounts)
-      if accounts.len == 1 and accounts[0].id == 0:
-        accounts = @[]
+        accounts = findAll(Account, db)
       resp Http200, jsonCors, $toJsonArray(accounts)
     finally:
       releaseDbConn(db)
@@ -400,10 +407,7 @@ router mainRouter:
     let companyId = parseInt(@"companyId")
     let db = getDbConn()
     try:
-      var accounts = @[newAccount()]
-      db.select(accounts, "company_id = $1 ORDER BY code", companyId)
-      if accounts.len == 1 and accounts[0].id == 0:
-        accounts = @[]
+      var accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $companyId)
       resp Http200, jsonCors, $toJsonArray(accounts)
     finally:
       releaseDbConn(db)
@@ -422,7 +426,7 @@ router mainRouter:
         company_id = body["companyId"].getBiggestInt(),
         parent_id = parentId
       )
-      db.insert(account)
+      save(account, db)
       resp Http201, jsonCors, $toJson(account)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -432,13 +436,11 @@ router mainRouter:
   get "/api/accounts/@id":
     let db = getDbConn()
     try:
-      var account = newAccount()
-      try:
-        db.select(account, "id = $1", parseInt(@"id"))
-      except:
+      let accountOpt = find(Account, parseInt(@"id"), db)
+      if accountOpt.isNone:
         resp Http404, jsonCors, $(%*{"error": "Account not found"})
-      if account.id == 0:
-        resp Http404, jsonCors, $(%*{"error": "Account not found"})
+        return
+      var account = accountOpt.get()
       resp Http200, jsonCors, $toJson(account)
     except:
       resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -452,13 +454,11 @@ router mainRouter:
     let companyId = request.params.getOrDefault("companyId", "0")
     let db = getDbConn()
     try:
-      var counterparts = @[newCounterpart()]
+      var counterparts: seq[Counterpart]
       if companyId != "0":
-        db.select(counterparts, "company_id = $1 ORDER BY name", parseInt(companyId))
+        counterparts = findWhere(Counterpart, db, "company_id = $1 ORDER BY name", $(parseInt(companyId)))
       else:
-        db.selectAll(counterparts)
-      if counterparts.len == 1 and counterparts[0].id == 0:
-        counterparts = @[]
+        counterparts = findAll(Counterpart, db)
       resp Http200, jsonCors, $toJsonArray(counterparts)
     finally:
       releaseDbConn(db)
@@ -466,10 +466,7 @@ router mainRouter:
   get "/api/counterparts/company/@companyId":
     let db = getDbConn()
     try:
-      var counterparts = @[newCounterpart()]
-      db.select(counterparts, "company_id = $1 ORDER BY name", parseInt(@"companyId"))
-      if counterparts.len == 1 and counterparts[0].id == 0:
-        counterparts = @[]
+      var counterparts = findWhere(Counterpart, db, "company_id = $1 ORDER BY name", $parseInt(@"companyId"))
       resp Http200, jsonCors, $toJsonArray(counterparts)
     finally:
       releaseDbConn(db)
@@ -483,7 +480,7 @@ router mainRouter:
         eik = body.getOrDefault("eik").getStr(""),
         company_id = body["companyId"].getBiggestInt()
       )
-      db.insert(counterpart)
+      save(counterpart, db)
       resp Http201, jsonCors, $toJson(counterpart)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -493,13 +490,11 @@ router mainRouter:
   get "/api/counterparts/@id":
     let db = getDbConn()
     try:
-      var counterpart = newCounterpart()
-      try:
-        db.select(counterpart, "id = $1", parseInt(@"id"))
-      except:
+      let counterpartOpt = find(Counterpart, parseInt(@"id"), db)
+      if counterpartOpt.isNone:
         resp Http404, jsonCors, $(%*{"error": "Counterpart not found"})
-      if counterpart.id == 0:
-        resp Http404, jsonCors, $(%*{"error": "Counterpart not found"})
+        return
+      var counterpart = counterpartOpt.get()
       resp Http200, jsonCors, $toJson(counterpart)
     except:
       resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -512,10 +507,7 @@ router mainRouter:
   get "/api/currencies":
     let db = getDbConn()
     try:
-      var currencies = @[newCurrency()]
-      db.selectAll(currencies)
-      if currencies.len == 1 and currencies[0].id == 0:
-        currencies = @[]
+      var currencies = findAll(Currency, db)
       resp Http200, jsonCors, $toJsonArray(currencies)
     finally:
       releaseDbConn(db)
@@ -533,7 +525,7 @@ router mainRouter:
         is_base_currency = body.getOrDefault("isBaseCurrency").getBool(false),
         is_active = true
       )
-      db.insert(currency)
+      save(currency, db)
       resp Http201, jsonCors, $toJson(currency)
     finally:
       releaseDbConn(db)
@@ -543,15 +535,15 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var currency = newCurrency()
-      db.select(currency, "id = $1", id)
-      if currency.id == 0:
+      let currencyOpt = find(Currency, id, db)
+      if currencyOpt.isNone:
         resp Http404, jsonCors, """{"error": "Currency not found"}"""
-      else:
-        if body.hasKey("isActive"):
-          currency.is_active = body["isActive"].getBool()
-        db.update(currency)
-        resp Http200, jsonCors, $toJson(currency)
+        return
+      var currency = currencyOpt.get()
+      if body.hasKey("isActive"):
+        currency.is_active = body["isActive"].getBool()
+      save(currency, db)
+      resp Http200, jsonCors, $toJson(currency)
     finally:
       releaseDbConn(db)
 
@@ -590,10 +582,7 @@ router mainRouter:
   get "/api/exchange-rates":
     let db = getDbConn()
     try:
-      var rates = @[newExchangeRate()]
-      db.selectAll(rates)
-      if rates.len == 1 and rates[0].id == 0:
-        rates = @[]
+      var rates = findAll(ExchangeRate, db)
       resp Http200, jsonCors, $toJsonArray(rates)
     finally:
       releaseDbConn(db)
@@ -611,15 +600,14 @@ router mainRouter:
       let xml = parseXml(xmlContent)
 
       # Find EUR currency (base)
-      var eurCurrency = newCurrency()
-      var eurCurrencies = @[newCurrency()]
-      db.select(eurCurrencies, "code = $1", "EUR")
-      if eurCurrencies.len > 0 and eurCurrencies[0].id != 0:
+      var eurCurrency: Currency
+      let eurCurrencies = findWhere(Currency, db, "code = $1", "EUR")
+      if eurCurrencies.len > 0:
         eurCurrency = eurCurrencies[0]
       else:
         # Create EUR if not exists
         eurCurrency = newCurrency(code = "EUR", name = "Euro", symbol = "€", isBaseCurrency = true, isActive = true)
-        db.insert(eurCurrency)
+        save(eurCurrency, db)
 
       var ratesAdded = 0
       var ratesDate = ""
@@ -640,14 +628,13 @@ router mainRouter:
                     let rate = parseFloat(rateStr)
 
                     # Find or create currency
-                    var curr = newCurrency()
-                    var currs = @[newCurrency()]
-                    db.select(currs, "code = $1", currCode)
-                    if currs.len > 0 and currs[0].id != 0:
+                    var curr: Currency
+                    let currs = findWhere(Currency, db, "code = $1", currCode)
+                    if currs.len > 0:
                       curr = currs[0]
                     else:
                       curr = newCurrency(code = currCode, name = currCode, isActive = false)
-                      db.insert(curr)
+                      save(curr, db)
 
                     # Create new rate (allow duplicates, user can manage them)
                     var newRate = newExchangeRate(
@@ -658,7 +645,7 @@ router mainRouter:
                       from_currency_id = eurCurrency.id,
                       to_currency_id = curr.id
                     )
-                    db.insert(newRate)
+                    save(newRate, db)
                     ratesAdded += 1
 
       resp Http200, jsonCors, $(%*{
@@ -682,13 +669,11 @@ router mainRouter:
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
     let db = getDbConn()
     try:
-      var rates = @[newVatRate()]
+      var rates: seq[VatRate]
       if companyId > 0:
-        db.select(rates, "company_id = $1", companyId)
+        rates = findWhere(VatRate, db, "company_id = $1", $companyId)
       else:
-        db.selectAll(rates)
-      if rates.len == 1 and rates[0].id == 0:
-        rates = @[]
+        rates = findAll(VatRate, db)
       resp Http200, jsonCors, $toJsonArray(rates)
     finally:
       releaseDbConn(db)
@@ -705,7 +690,7 @@ router mainRouter:
       )
       if body.hasKey("effectiveFrom"):
         vatRate.valid_from = some(parse(body["effectiveFrom"].getStr(), "yyyy-MM-dd"))
-      db.insert(vatRate)
+      save(vatRate, db)
       resp Http201, jsonCors, $toJson(vatRate)
     finally:
       releaseDbConn(db)
@@ -714,13 +699,13 @@ router mainRouter:
     let id = parseInt(@"id")
     let db = getDbConn()
     try:
-      var vatRate = newVatRate()
-      db.select(vatRate, "id = $1", id)
-      if vatRate.id == 0:
+      let vatRateOpt = find(VatRate, id, db)
+      if vatRateOpt.isNone:
         resp Http404, jsonCors, """{"error": "VAT rate not found"}"""
-      else:
-        db.delete(vatRate)
-        resp Http200, jsonCors, """{"success": true}"""
+        return
+      var vatRate = vatRateOpt.get()
+      delete(vatRate, db)
+      resp Http200, jsonCors, """{"success": true}"""
     finally:
       releaseDbConn(db)
 
@@ -730,10 +715,7 @@ router mainRouter:
   get "/api/users":
     let db = getDbConn()
     try:
-      var users = @[newUser()]
-      db.selectAll(users)
-      if users.len == 1 and users[0].id == 0:
-        users = @[]
+      var users = findAll(User, db)
       var usersJson = newJArray()
       for user in users:
         usersJson.add(%*{
@@ -768,25 +750,25 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var user = newUser()
-      db.select(user, "id = $1", id)
-      if user.id == 0:
+      let userOpt = find(User, id, db)
+      if userOpt.isNone:
         resp Http404, jsonCors, """{"error": "User not found"}"""
-      else:
-        if body.hasKey("username"):
-          user.username = body["username"].getStr()
-        if body.hasKey("email"):
-          user.email = body["email"].getStr()
-        if body.hasKey("firstName"):
-          user.first_name = body["firstName"].getStr()
-        if body.hasKey("lastName"):
-          user.last_name = body["lastName"].getStr()
-        if body.hasKey("groupId"):
-          user.group_id = body["groupId"].getInt().int64
-        if body.hasKey("isActive"):
-          user.is_active = body["isActive"].getBool()
-        db.update(user)
-        resp Http200, jsonCors, $toJson(user)
+        return
+      var user = userOpt.get()
+      if body.hasKey("username"):
+        user.username = body["username"].getStr()
+      if body.hasKey("email"):
+        user.email = body["email"].getStr()
+      if body.hasKey("firstName"):
+        user.first_name = body["firstName"].getStr()
+      if body.hasKey("lastName"):
+        user.last_name = body["lastName"].getStr()
+      if body.hasKey("groupId"):
+        user.group_id = body["groupId"].getInt().int64
+      if body.hasKey("isActive"):
+        user.is_active = body["isActive"].getBool()
+      save(user, db)
+      resp Http200, jsonCors, $toJson(user)
     finally:
       releaseDbConn(db)
 
@@ -794,13 +776,13 @@ router mainRouter:
     let id = parseInt(@"id")
     let db = getDbConn()
     try:
-      var user = newUser()
-      db.select(user, "id = $1", id)
-      if user.id == 0:
+      let userOpt = find(User, id, db)
+      if userOpt.isNone:
         resp Http404, jsonCors, """{"error": "User not found"}"""
-      else:
-        db.delete(user)
-        resp Http200, jsonCors, """{"success": true}"""
+        return
+      var user = userOpt.get()
+      delete(user, db)
+      resp Http200, jsonCors, """{"success": true}"""
     finally:
       releaseDbConn(db)
 
@@ -809,16 +791,16 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var user = newUser()
-      db.select(user, "id = $1", id)
-      if user.id == 0:
+      let userOpt = find(User, id, db)
+      if userOpt.isNone:
         resp Http404, jsonCors, """{"error": "User not found"}"""
-      else:
-        let newSalt = $epochTime()
-        user.password = hashPassword(body["newPassword"].getStr(), newSalt)
-        user.salt = newSalt
-        db.update(user)
-        resp Http200, jsonCors, """{"success": true}"""
+        return
+      var user = userOpt.get()
+      let newSalt = $epochTime()
+      user.password = hashPassword(body["newPassword"].getStr(), newSalt)
+      user.salt = newSalt
+      save(user, db)
+      resp Http200, jsonCors, """{"success": true}"""
     finally:
       releaseDbConn(db)
 
@@ -828,10 +810,7 @@ router mainRouter:
   get "/api/user-groups":
     let db = getDbConn()
     try:
-      var groups = @[newUserGroup()]
-      db.selectAll(groups)
-      if groups.len == 1 and groups[0].id == 0:
-        groups = @[]
+      var groups = findAll(UserGroup, db)
       resp Http200, jsonCors, $toJsonArray(groups)
     finally:
       releaseDbConn(db)
@@ -843,13 +822,11 @@ router mainRouter:
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
     let db = getDbConn()
     try:
-      var categories = @[newFixedAssetCategory()]
+      var categories: seq[FixedAssetCategory]
       if companyId > 0:
-        db.select(categories, "company_id = $1", companyId)
+        categories = findWhere(FixedAssetCategory, db, "company_id = $1", $companyId)
       else:
-        db.selectAll(categories)
-      if categories.len == 1 and categories[0].id == 0:
-        categories = @[]
+        categories = findAll(FixedAssetCategory, db)
       resp Http200, jsonCors, $toJsonArray(categories)
     finally:
       releaseDbConn(db)
@@ -909,13 +886,11 @@ router mainRouter:
     let companyId = request.params.getOrDefault("companyId", "0")
     let db = getDbConn()
     try:
-      var entries = @[newJournalEntry()]
+      var entries: seq[JournalEntry]
       if companyId != "0":
-        db.select(entries, "company_id = $1 ORDER BY document_date DESC", parseInt(companyId))
+        entries = findWhere(JournalEntry, db, "company_id = $1 ORDER BY document_date DESC", $(parseInt(companyId)))
       else:
-        db.selectAll(entries)
-      if entries.len == 1 and entries[0].id == 0:
-        entries = @[]
+        entries = findAll(JournalEntry, db)
       resp Http200, jsonCors, $toJsonArray(entries)
     finally:
       releaseDbConn(db)
@@ -947,7 +922,7 @@ router mainRouter:
       if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
         entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
 
-      db.insert(entry)
+      save(entry, db)
 
       # Insert entry lines if provided
       if body.hasKey("lines"):
@@ -963,7 +938,7 @@ router mainRouter:
           )
           if lineJson.hasKey("counterpartId") and lineJson["counterpartId"].kind != JNull:
             line.counterpart_id = some(lineJson["counterpartId"].getBiggestInt())
-          db.insert(line)
+          save(line, db)
           inc lineOrder
 
       resp Http201, jsonCors, $toJson(entry)
@@ -976,14 +951,14 @@ router mainRouter:
     let entryId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", entryId)
+      let entryOpt = find(JournalEntry, entryId, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
+        return
+      var entry = entryOpt.get()
 
       # Get entry lines
-      var lines = @[newEntryLine()]
-      db.select(lines, "journal_entry_id = $1 ORDER BY line_order", entryId)
-      if lines.len == 1 and lines[0].id == 0:
-        lines = @[]
+      var lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $entryId)
 
       var entryJson = toJson(entry)
       entryJson["lines"] = toJsonArray(lines)
@@ -998,8 +973,11 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", entryId)
+      let entryOpt = find(JournalEntry, entryId, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
+        return
+      var entry = entryOpt.get()
 
       if entry.is_posted:
         resp Http400, jsonCors, $(%*{"error": "Не може да редактирате осчетоводен запис"})
@@ -1015,7 +993,7 @@ router mainRouter:
         else:
           entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
       entry.updated_at = now()
-      db.update(entry)
+      save(entry, db)
       resp Http200, jsonCors, $toJson(entry)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -1026,15 +1004,18 @@ router mainRouter:
     let entryId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", entryId)
+      let entryOpt = find(JournalEntry, entryId, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
+        return
+      var entry = entryOpt.get()
 
       if entry.is_posted:
         resp Http400, jsonCors, $(%*{"error": "Не може да изтриете осчетоводен запис"})
 
       # Delete entry lines first
       db.exec(sql"""DELETE FROM "EntryLine" WHERE journal_entry_id = $1""", entryId)
-      db.delete(entry)
+      delete(entry, db)
       resp Http200, jsonCors, $(%*{"success": true})
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -1045,8 +1026,11 @@ router mainRouter:
     let entryId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", entryId)
+      let entryOpt = find(JournalEntry, entryId, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
+        return
+      var entry = entryOpt.get()
 
       if entry.is_posted:
         resp Http400, jsonCors, $(%*{"error": "Записът вече е осчетоводен"})
@@ -1069,7 +1053,7 @@ router mainRouter:
       entry.is_posted = true
       entry.posted_at = some(now())
       entry.updated_at = now()
-      db.update(entry)
+      save(entry, db)
       resp Http200, jsonCors, $toJson(entry)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -1080,8 +1064,11 @@ router mainRouter:
     let entryId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", entryId)
+      let entryOpt = find(JournalEntry, entryId, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
+        return
+      var entry = entryOpt.get()
 
       if not entry.is_posted:
         resp Http400, jsonCors, $(%*{"error": "Записът не е осчетоводен"})
@@ -1089,7 +1076,7 @@ router mainRouter:
       entry.is_posted = false
       entry.posted_at = none(DateTime)
       entry.updated_at = now()
-      db.update(entry)
+      save(entry, db)
       resp Http200, jsonCors, $toJson(entry)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -1103,13 +1090,11 @@ router mainRouter:
     let journalEntryId = request.params.getOrDefault("journalEntryId", "0")
     let db = getDbConn()
     try:
-      var lines = @[newEntryLine()]
+      var lines: seq[EntryLine]
       if journalEntryId != "0":
-        db.select(lines, "journal_entry_id = $1 ORDER BY line_order", parseInt(journalEntryId))
+        lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $(parseInt(journalEntryId)))
       else:
-        db.selectAll(lines)
-      if lines.len == 1 and lines[0].id == 0:
-        lines = @[]
+        lines = findAll(EntryLine, db)
       resp Http200, jsonCors, $toJsonArray(lines)
     finally:
       releaseDbConn(db)
@@ -1119,8 +1104,11 @@ router mainRouter:
     let db = getDbConn()
     try:
       # Check if journal entry is posted
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", body["journalEntryId"].getBiggestInt())
+      let entryOpt = find(JournalEntry, body["journalEntryId"].getBiggestInt().int, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Journal entry not found"})
+        return
+      var entry = entryOpt.get()
       if entry.is_posted:
         resp Http400, jsonCors, $(%*{"error": "Не може да добавяте редове към осчетоводен запис"})
 
@@ -1147,7 +1135,7 @@ router mainRouter:
       if body.hasKey("exchangeRate"):
         line.exchange_rate = body["exchangeRate"].getFloat()
 
-      db.insert(line)
+      save(line, db)
       resp Http201, jsonCors, $toJson(line)
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -1158,16 +1146,22 @@ router mainRouter:
     let lineId = parseInt(@"id")
     let db = getDbConn()
     try:
-      var line = newEntryLine()
-      db.select(line, "id = $1", lineId)
+      let lineOpt = find(EntryLine, lineId, db)
+      if lineOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Entry line not found"})
+        return
+      var line = lineOpt.get()
 
       # Check if journal entry is posted
-      var entry = newJournalEntry()
-      db.select(entry, "id = $1", line.journal_entry_id)
+      let entryOpt = find(JournalEntry, line.journal_entry_id.int, db)
+      if entryOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Journal entry not found"})
+        return
+      var entry = entryOpt.get()
       if entry.is_posted:
         resp Http400, jsonCors, $(%*{"error": "Не може да изтривате редове от осчетоводен запис"})
 
-      db.delete(line)
+      delete(line, db)
       resp Http200, jsonCors, $(%*{"success": true})
     except:
       resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
@@ -1246,8 +1240,11 @@ router mainRouter:
     let db = getDbConn()
     try:
       # Get account info
-      var account = newAccount()
-      db.select(account, "id = $1", parseInt(accountId))
+      let accountOpt = find(Account, parseInt(accountId), db)
+      if accountOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Account not found"})
+        return
+      var account = accountOpt.get()
 
       # Get opening balance
       let openingRows = db.getAllRows(sql"""
@@ -1332,13 +1329,11 @@ router mainRouter:
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
     let db = getDbConn()
     try:
-      var banks = @[newBankProfile()]
+      var banks: seq[BankProfile]
       if companyId > 0:
-        db.select(banks, "company_id = $1", companyId)
+        banks = findWhere(BankProfile, db, "company_id = $1", $companyId)
       else:
-        db.selectAll(banks)
-      if banks.len == 1 and banks[0].id == 0:
-        banks = @[]
+        banks = findAll(BankProfile, db)
       resp Http200, jsonCors, $toJsonArray(banks)
     finally:
       releaseDbConn(db)
@@ -1347,12 +1342,12 @@ router mainRouter:
     let id = @"id".parseInt
     let db = getDbConn()
     try:
-      var bank = newBankProfile()
-      db.select(bank, "id = $1", id)
-      if bank.id == 0:
+      let bankOpt = find(BankProfile, id, db)
+      if bankOpt.isNone:
         resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
-      else:
-        resp Http200, jsonCors, $toJson(bank)
+        return
+      var bank = bankOpt.get()
+      resp Http200, jsonCors, $toJson(bank)
     finally:
       releaseDbConn(db)
 
@@ -1373,7 +1368,7 @@ router mainRouter:
         saltedge_provider_name = body.getOrDefault("saltEdgeProviderName").getStr(""),
         is_active = body.getOrDefault("isActive").getBool(true)
       )
-      db.insert(bank)
+      save(bank, db)
       resp Http201, jsonCors, $toJson(bank)
     except CatchableError as e:
       resp Http400, jsonCors, $(%*{"error": e.msg})
@@ -1385,30 +1380,30 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var bank = newBankProfile()
-      db.select(bank, "id = $1", id)
-      if bank.id == 0:
+      let bankOpt = find(BankProfile, id, db)
+      if bankOpt.isNone:
         resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
-      else:
-        if body.hasKey("name"):
-          bank.name = body["name"].getStr
-        if body.hasKey("iban"):
-          bank.iban = body["iban"].getStr
-        if body.hasKey("accountId"):
-          bank.account_id = body["accountId"].getInt.int64
-        if body.hasKey("bufferAccountId"):
-          bank.buffer_account_id = body["bufferAccountId"].getInt.int64
-        if body.hasKey("currencyCode"):
-          bank.currency_code = body["currencyCode"].getStr
-        if body.hasKey("connectionType"):
-          bank.connection_type = body["connectionType"].getStr
-        if body.hasKey("importFormat"):
-          bank.import_format = body["importFormat"].getStr
-        if body.hasKey("isActive"):
-          bank.is_active = body["isActive"].getBool
-        bank.updated_at = now()
-        db.update(bank)
-        resp Http200, jsonCors, $toJson(bank)
+        return
+      var bank = bankOpt.get()
+      if body.hasKey("name"):
+        bank.name = body["name"].getStr
+      if body.hasKey("iban"):
+        bank.iban = body["iban"].getStr
+      if body.hasKey("accountId"):
+        bank.account_id = body["accountId"].getInt.int64
+      if body.hasKey("bufferAccountId"):
+        bank.buffer_account_id = body["bufferAccountId"].getInt.int64
+      if body.hasKey("currencyCode"):
+        bank.currency_code = body["currencyCode"].getStr
+      if body.hasKey("connectionType"):
+        bank.connection_type = body["connectionType"].getStr
+      if body.hasKey("importFormat"):
+        bank.import_format = body["importFormat"].getStr
+      if body.hasKey("isActive"):
+        bank.is_active = body["isActive"].getBool
+      bank.updated_at = now()
+      save(bank, db)
+      resp Http200, jsonCors, $toJson(bank)
     finally:
       releaseDbConn(db)
 
@@ -1416,13 +1411,13 @@ router mainRouter:
     let id = @"id".parseInt
     let db = getDbConn()
     try:
-      var bank = newBankProfile()
-      db.select(bank, "id = $1", id)
-      if bank.id == 0:
+      let bankOpt = find(BankProfile, id, db)
+      if bankOpt.isNone:
         resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
-      else:
-        db.delete(bank)
-        resp Http200, jsonCors, """{"success": true}"""
+        return
+      var bank = bankOpt.get()
+      delete(bank, db)
+      resp Http200, jsonCors, """{"success": true}"""
     finally:
       releaseDbConn(db)
 
@@ -1434,16 +1429,14 @@ router mainRouter:
     let status = request.params.getOrDefault("status", "")
     let db = getDbConn()
     try:
-      var assets = @[newFixedAsset()]
+      var assets: seq[FixedAsset]
       if companyId > 0:
         if status != "":
-          db.select(assets, "company_id = $1 AND status = $2", companyId, status)
+          assets = findWhere(FixedAsset, db, "company_id = $1 AND status = $2", $companyId, status)
         else:
-          db.select(assets, "company_id = $1", companyId)
+          assets = findWhere(FixedAsset, db, "company_id = $1", $companyId)
       else:
-        db.selectAll(assets)
-      if assets.len == 1 and assets[0].id == 0:
-        assets = @[]
+        assets = findAll(FixedAsset, db)
       resp Http200, jsonCors, $toJsonArray(assets)
     finally:
       releaseDbConn(db)
@@ -1452,12 +1445,12 @@ router mainRouter:
     let id = @"id".parseInt
     let db = getDbConn()
     try:
-      var asset = newFixedAsset()
-      db.select(asset, "id = $1", id)
-      if asset.id == 0:
+      let assetOpt = find(FixedAsset, id, db)
+      if assetOpt.isNone:
         resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
-      else:
-        resp Http200, jsonCors, $toJson(asset)
+        return
+      var asset = assetOpt.get()
+      resp Http200, jsonCors, $toJson(asset)
     finally:
       releaseDbConn(db)
 
@@ -1465,9 +1458,11 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var category = newFixedAssetCategory()
-      let categoryId = body["categoryId"].getInt
-      db.select(category, "id = $1", categoryId)
+      let categoryOpt = find(FixedAssetCategory, body["categoryId"].getInt(), db)
+      if categoryOpt.isNone:
+        resp Http404, jsonCors, """{"error": "Fixed asset category not found"}"""
+        return
+      var category = categoryOpt.get()
 
       let acquisitionCost = body["acquisitionCost"].getFloat
 
@@ -1475,7 +1470,7 @@ router mainRouter:
         name = body["name"].getStr,
         inventory_number = body["inventoryNumber"].getStr,
         description = body.getOrDefault("description").getStr(""),
-        category_id = categoryId.int64,
+        category_id = category.id,
         company_id = body["companyId"].getInt.int64,
         acquisition_date = parse(body["acquisitionDate"].getStr, "yyyy-MM-dd"),
         acquisition_cost = acquisitionCost,
@@ -1495,7 +1490,7 @@ router mainRouter:
       asset.accounting_book_value = acquisitionCost
       asset.tax_book_value = acquisitionCost
 
-      db.insert(asset)
+      save(asset, db)
       resp Http201, jsonCors, $toJson(asset)
     except CatchableError as e:
       resp Http400, jsonCors, $(%*{"error": e.msg})
@@ -1507,25 +1502,25 @@ router mainRouter:
     let body = parseJson(request.body)
     let db = getDbConn()
     try:
-      var asset = newFixedAsset()
-      db.select(asset, "id = $1", id)
-      if asset.id == 0:
+      let assetOpt = find(FixedAsset, id, db)
+      if assetOpt.isNone:
         resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
-      else:
-        if body.hasKey("name"):
-          asset.name = body["name"].getStr
-        if body.hasKey("description"):
-          asset.description = body["description"].getStr
-        if body.hasKey("status"):
-          asset.status = body["status"].getStr
-        if body.hasKey("accountingDepreciationRate"):
-          asset.accounting_depreciation_rate = body["accountingDepreciationRate"].getFloat
-        if body.hasKey("taxDepreciationRate"):
-          asset.tax_depreciation_rate = body["taxDepreciationRate"].getFloat
+        return
+      var asset = assetOpt.get()
+      if body.hasKey("name"):
+        asset.name = body["name"].getStr
+      if body.hasKey("description"):
+        asset.description = body["description"].getStr
+      if body.hasKey("status"):
+        asset.status = body["status"].getStr
+      if body.hasKey("accountingDepreciationRate"):
+        asset.accounting_depreciation_rate = body["accountingDepreciationRate"].getFloat
+      if body.hasKey("taxDepreciationRate"):
+        asset.tax_depreciation_rate = body["taxDepreciationRate"].getFloat
 
-        asset.updated_at = now()
-        db.update(asset)
-        resp Http200, jsonCors, $toJson(asset)
+      asset.updated_at = now()
+      save(asset, db)
+      resp Http200, jsonCors, $toJson(asset)
     finally:
       releaseDbConn(db)
 
@@ -1533,13 +1528,13 @@ router mainRouter:
     let id = @"id".parseInt
     let db = getDbConn()
     try:
-      var asset = newFixedAsset()
-      db.select(asset, "id = $1", id)
-      if asset.id == 0:
+      let assetOpt = find(FixedAsset, id, db)
+      if assetOpt.isNone:
         resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
-      else:
-        db.delete(asset)
-        resp Http200, jsonCors, """{"success": true}"""
+        return
+      var asset = assetOpt.get()
+      delete(asset, db)
+      resp Http200, jsonCors, """{"success": true}"""
     finally:
       releaseDbConn(db)
 
@@ -1550,10 +1545,7 @@ router mainRouter:
     let month = body["month"].getInt
     let db = getDbConn()
     try:
-      var assets = @[newFixedAsset()]
-      db.select(assets, "company_id = $1 AND status = $2", companyId, "ACTIVE")
-      if assets.len == 1 and assets[0].id == 0:
-        assets = @[]
+      var assets = findWhere(FixedAsset, db, "company_id = $1 AND status = $2", $companyId, "ACTIVE")
 
       var calculated: seq[JsonNode] = @[]
       var totalAccountingAmount = 0.0
@@ -1561,10 +1553,9 @@ router mainRouter:
       var errors: seq[JsonNode] = @[]
 
       for asset in assets:
-        var existing = @[newDepreciationJournal()]
-        db.select(existing, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
-                  asset.id, year, month)
-        if existing.len > 0 and existing[0].id > 0:
+        let existing = findWhere(DepreciationJournal, db, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
+                  $asset.id, $year, $month)
+        if existing.len > 0:
           continue
 
         let monthlyAccountingRate = asset.accounting_depreciation_rate / 12.0 / 100.0
@@ -1594,7 +1585,7 @@ router mainRouter:
           tax_book_value_before = asset.tax_book_value,
           tax_book_value_after = asset.tax_book_value - taxDepreciation
         )
-        db.insert(journal)
+        save(journal, db)
 
         var assetToUpdate = asset
         assetToUpdate.accounting_accumulated_depreciation += accountingDepreciation
@@ -1607,7 +1598,7 @@ router mainRouter:
         if assetToUpdate.accounting_book_value <= assetToUpdate.residual_value:
           assetToUpdate.status = "DEPRECIATED"
 
-        db.update(assetToUpdate)
+        save(assetToUpdate, db)
 
         totalAccountingAmount += accountingDepreciation
         totalTaxAmount += taxDepreciation
@@ -1637,11 +1628,8 @@ router mainRouter:
     let month = body["month"].getInt
     let db = getDbConn()
     try:
-      var entries = @[newDepreciationJournal()]
-      db.select(entries, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
-                companyId, year, month, false)
-      if entries.len == 1 and entries[0].id == 0:
-        entries = @[]
+      var entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
+                $companyId, $year, $month, "false")
 
       if entries.len == 0:
         resp Http400, jsonCors, """{"error": "No unposted depreciation entries found"}"""
@@ -1656,15 +1644,15 @@ router mainRouter:
         document_number = "АМОР-" & $year & "-" & $month,
         total_amount = totalAmount
       )
-      db.insert(journalEntry)
+      save(journalEntry, db)
 
       for entry in entries:
         var e = entry
         e.is_posted = true
-        e.journal_entry_id = some(journalEntry.id)
+        e.journal_entry_id = some(journalEntry.id.int64)
         e.posted_at = some(now())
         e.updated_at = now()
-        db.update(e)
+        save(e, db)
 
       resp Http200, jsonCors, $(%*{
         "journalEntryId": journalEntry.id,
@@ -1682,19 +1670,19 @@ router mainRouter:
     let month = request.params.getOrDefault("month", "")
     let db = getDbConn()
     try:
-      var entries = @[newDepreciationJournal()]
+      var entries: seq[DepreciationJournal]
       if month != "":
-        db.select(entries, "company_id = $1 AND period_year = $2 AND period_month = $3",
-                  companyId, year, month.parseInt)
+        entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3",
+                  $companyId, $year, $(month.parseInt))
       else:
-        db.select(entries, "company_id = $1 AND period_year = $2", companyId, year)
-      if entries.len == 1 and entries[0].id == 0:
-        entries = @[]
+        entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2", $companyId, $year)
 
       var journalResult: seq[JsonNode] = @[]
       for entry in entries:
-        var asset = newFixedAsset()
-        db.select(asset, "id = $1", entry.fixed_asset_id)
+        let assetOpt = find(FixedAsset, entry.fixed_asset_id.int, db)
+        if assetOpt.isNone:
+          continue
+        var asset = assetOpt.get()
         var entryJson = %*{
           "id": entry.id,
           "fixedAssetId": entry.fixed_asset_id,

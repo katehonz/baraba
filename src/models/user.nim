@@ -1,9 +1,9 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 
 type
-  UserGroup* = ref object of Model
-    name* {.unique.}: string
+  UserGroup* = object of Model
+    name*: string
     description*: string
     can_create_companies*: bool
     can_edit_companies*: bool
@@ -13,15 +13,15 @@ type
     can_post_entries*: bool
     created_at*: DateTime
 
-  User* = ref object of Model
-    username* {.unique.}: string
-    email* {.unique.}: string
+  User* = object of Model
+    username*: string
+    email*: string
     password*: string
     salt*: string
     first_name*: string
     last_name*: string
     is_active*: bool
-    group_id* {.fk: UserGroup.}: int64
+    group_id*: int64
     document_period_start*: Option[DateTime]
     document_period_end*: Option[DateTime]
     document_period_active*: bool
@@ -47,6 +47,7 @@ proc newUserGroup*(
   can_post_entries = false
 ): UserGroup =
   UserGroup(
+    id: 0,
     name: name,
     description: description,
     can_create_companies: can_create_companies,
@@ -69,6 +70,7 @@ proc newUser*(
   group_id: int64 = 0
 ): User =
   User(
+    id: 0,
     username: username,
     email: email,
     password: password,

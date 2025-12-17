@@ -10,7 +10,7 @@
 - **Nim** 2.2.4
 - **Jester** - Web framework (локален fork с Nim 2.x съвместимост)
 - **httpbeast** - HTTP сървър (локален fork с thread-safety fixes)
-- **norm** - ORM за PostgreSQL
+- **[orm-baraba](https://github.com/katehonz/orm-baraba)** - Собствен PostgreSQL ORM с enterprise-grade функционалности
 - **[jwt-nim-baraba](https://github.com/katehonz/jwt-nim-baraba)** - Собствена JWT библиотека
 - **nim-graphql** - GraphQL API
 

@@ -1,5 +1,5 @@
 import std/[json, strutils, times]
-import norm/postgres
+import orm/orm
 import ../db/config
 import ../models/audit_log
 
@@ -7,7 +7,6 @@ proc getAuditLogs*(companyId: int, fromDate: string, toDate: string, search: str
   let db = getDbConn()
   defer: releaseDbConn(db)
 
-  var logs: seq[AuditLog] = @[]
   var whereClause = "1=1"
   var args: seq[string] = @[]
   var paramIdx = 1
@@ -28,8 +27,10 @@ proc getAuditLogs*(companyId: int, fromDate: string, toDate: string, search: str
     inc paramIdx
 
   if search.len > 0:
-    whereClause.add(" AND (username ILIKE $" & $paramIdx & " OR details ILIKE $" & $paramIdx & ")")
+    whereClause.add(" AND (username ILIKE $" & $paramIdx & " OR details ILIKE $" & $(paramIdx+1) & ")")
     args.add("%" & search & "%")
+    args.add("%" & search & "%")
+    inc paramIdx
     inc paramIdx
 
   if action.len > 0:
@@ -37,49 +38,15 @@ proc getAuditLogs*(companyId: int, fromDate: string, toDate: string, search: str
     args.add(action)
     inc paramIdx
 
-  # Build query with ORDER BY, LIMIT, OFFSET
-  let fullWhere = whereClause & " ORDER BY created_at DESC LIMIT " & $limit & " OFFSET " & $offset
+  let logs = findWhere(AuditLog, db, whereClause & " ORDER BY created_at DESC LIMIT " & $limit & " OFFSET " & $offset, args)
 
-  logs = @[newAuditLog()]
-  case args.len
-  of 0:
-    db.select(logs, fullWhere)
-  of 1:
-    db.select(logs, fullWhere, args[0])
-  of 2:
-    db.select(logs, fullWhere, args[0], args[1])
-  of 3:
-    db.select(logs, fullWhere, args[0], args[1], args[2])
-  of 4:
-    db.select(logs, fullWhere, args[0], args[1], args[2], args[3])
-  else:
-    db.select(logs, fullWhere, args[0], args[1], args[2], args[3], args[4])
+  # Get total count
+  var totalCount = 0
+  let countQuery = "SELECT COUNT(*) FROM audit_logs WHERE " & whereClause
+  let countRows = rawQuery(db, countQuery, args)
+  if countRows.len > 0 and countRows[0].len > 0:
+    totalCount = parseInt($countRows[0][0])
 
-  if logs.len == 1 and logs[0].id == 0:
-    logs = @[]
-
-  # Get total count using raw query
-  var totalCount = logs.len
-  let countQuery = sql("SELECT COUNT(*) FROM \"AuditLog\" WHERE " & whereClause)
-  try:
-    var countRows: seq[Row]
-    case args.len
-    of 0:
-      countRows = db.getAllRows(countQuery)
-    of 1:
-      countRows = db.getAllRows(countQuery, args[0])
-    of 2:
-      countRows = db.getAllRows(countQuery, args[0], args[1])
-    of 3:
-      countRows = db.getAllRows(countQuery, args[0], args[1], args[2])
-    of 4:
-      countRows = db.getAllRows(countQuery, args[0], args[1], args[2], args[3])
-    else:
-      countRows = db.getAllRows(countQuery, args[0], args[1], args[2], args[3], args[4])
-    if countRows.len > 0 and countRows[0].len > 0:
-      totalCount = parseInt($countRows[0][0])
-  except:
-    discard
 
   var logsJson = newJArray()
   for log in logs:
@@ -106,16 +73,16 @@ proc getAuditLogStats*(companyId: int, days: int): string =
   let db = getDbConn()
   defer: releaseDbConn(db)
 
-  let query = sql"""
+  let query = """
     SELECT action, COUNT(*) as count
-    FROM "AuditLog"
-    WHERE company_id = ? AND created_at >= NOW() - INTERVAL '30 days'
+    FROM audit_logs
+    WHERE company_id = $1 AND created_at >= NOW() - CAST($2 || ' days' as INTERVAL)
     GROUP BY action
     ORDER BY count DESC
   """
 
   var stats = newJArray()
-  for row in db.getAllRows(query, companyId):
+  for row in rawQuery(db, query, $companyId, $days):
     stats.add(%*{"action": $row[0], "count": parseInt($row[1])})
 
   return $stats
@@ -124,7 +91,7 @@ proc getMonthlyTransactionStats*(companyId: int, fromYear: int, fromMonth: int, 
   let db = getDbConn()
   defer: releaseDbConn(db)
 
-  let query = sql"""
+  let query = """
     SELECT
       EXTRACT(YEAR FROM je.document_date)::int as year,
       EXTRACT(MONTH FROM je.document_date)::int as month,
@@ -135,17 +102,17 @@ proc getMonthlyTransactionStats*(companyId: int, fromYear: int, fromMonth: int, 
       COUNT(CASE WHEN je.is_posted THEN el.id END)::int as posted_entry_lines,
       COALESCE(SUM(el.debit_amount), 0) as total_amount,
       0 as vat_amount
-    FROM "JournalEntry" je
-    LEFT JOIN "EntryLine" el ON el.journal_entry_id = je.id
-    WHERE je.company_id = ?
-      AND je.document_date >= MAKE_DATE(?, ?, 1)
-      AND je.document_date <= (MAKE_DATE(?, ?, 1) + INTERVAL '1 month' - INTERVAL '1 day')::date
+    FROM journal_entries je
+    LEFT JOIN entry_lines el ON el.journal_entry_id = je.id
+    WHERE je.company_id = $1
+      AND je.document_date >= MAKE_DATE($2, $3, 1)
+      AND je.document_date <= (MAKE_DATE($4, $5, 1) + INTERVAL '1 month' - INTERVAL '1 day')::date
     GROUP BY year, month, month_name
     ORDER BY year, month
   """
 
   var stats = newJArray()
-  for row in db.getAllRows(query, companyId, fromYear, fromMonth, toYear, toMonth):
+  for row in rawQuery(db, query, $companyId, $fromYear, $fromMonth, $toYear, $toMonth):
     stats.add(%*{
       "year": parseInt($row[0]),
       "month": parseInt($row[1]),

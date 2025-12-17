@@ -1,8 +1,8 @@
 import std/times
-import norm/model
+import orm/orm
 
 type
-  AuditLog* = ref object of Model
+  AuditLog* = object of Model
     company_id*: int64
     user_id*: int64
     username*: string
@@ -32,6 +32,7 @@ proc newAuditLog*(
   error_message: string = "",
 ): AuditLog =
   AuditLog(
+    id: 0,
     company_id: company_id,
     user_id: user_id,
     username: username,

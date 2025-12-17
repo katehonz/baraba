@@ -11,5 +11,5 @@ bin           = @["baraba"]
 
 requires "nim >= 2.0.0"
 requires "jester >= 0.6.0"
-requires "norm >= 2.8.0"
+requires "vendor/orm-baraba/orm_baraba.nimble"
 requires "https://github.com/katehonz/jwt-nim-baraba"

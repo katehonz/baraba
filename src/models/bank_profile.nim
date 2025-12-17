@@ -1,8 +1,8 @@
 import std/[times, options]
-import norm/model
+import orm/orm
 
 type
-  BankProfile* = ref object of Model
+  BankProfile* = object of Model
     name*: string
     iban*: string
     account_id*: int64
@@ -33,6 +33,7 @@ proc newBankProfile*(
   is_active = true
 ): BankProfile =
   result = BankProfile(
+    id: 0,
     name: name,
     iban: iban,
     account_id: account_id,

@@ -1,6 +1,6 @@
 import std/[times, options, strutils, base64, json, tables]
 import jwt
-import norm/postgres
+import orm/orm
 import ../models/user
 import ../db/config
 
@@ -49,23 +49,15 @@ proc verifyToken*(tokenStr: string): tuple[valid: bool, userId: int64, username:
     discard
 
 proc authenticateUser*(db: DbConn, username, password: string): Option[User] =
-  var users = @[newUser()]
-  db.select(users, "username = $1 AND is_active = true", username)
-  if users.len > 0 and users[0].id != 0:
+  let users = findWhere(User, db, "username = $1 AND is_active = true", username)
+  if users.len > 0:
     let user = users[0]
     if verifyPassword(password, user.salt, user.password):
       return some(user)
   return none(User)
 
 proc getUserById*(db: DbConn, userId: int64): Option[User] =
-  var user = newUser()
-  try:
-    db.select(user, "id = $1", userId)
-    if user.id != 0:
-      return some(user)
-  except:
-    discard
-  return none(User)
+  return find(User, userId.int, db)
 
 proc createUser*(db: DbConn, username, email, password: string, groupId: int64): User =
   let salt = $epochTime()
@@ -76,27 +68,25 @@ proc createUser*(db: DbConn, username, email, password: string, groupId: int64):
     salt = salt,
     group_id = groupId
   )
-  db.insert(user)
+  save(user, db)
   return user
 
 proc recoverPassword*(db: DbConn, email: string): Option[string] =
-  var users = @[newUser()]
-  db.select(users, "email = $1 AND is_active = true", email)
-  if users.len > 0 and users[0].id != 0:
+  let users = findWhere(User, db, "email = $1 AND is_active = true", email)
+  if users.len > 0:
     var user = users[0]
     let token = $epochTime() # In a real app, use a secure random token
     user.recovery_code_hash = hashPassword(token, user.salt)
     user.recovery_code_created_at = some(now())
-    db.update(user)
+    save(user, db)
     # TODO: Send email with the token
     # sendEmail(user.email, "Password recovery", "Your recovery token is: " & token)
     return some(token)
   return none(string)
 
 proc resetPassword*(db: DbConn, email: string, token: string, newPassword: string): bool =
-  var users = @[newUser()]
-  db.select(users, "email = $1 AND is_active = true", email)
-  if users.len > 0 and users[0].id != 0:
+  let users = findWhere(User, db, "email = $1 AND is_active = true", email)
+  if users.len > 0:
     var user = users[0]
     if verifyPassword(token, user.salt, user.recovery_code_hash):
       # Check if the token is expired (e.g., 1 hour)
@@ -106,16 +96,9 @@ proc resetPassword*(db: DbConn, email: string, token: string, newPassword: strin
         user.salt = salt
         user.recovery_code_hash = ""
         user.recovery_code_created_at = none(DateTime)
-        db.update(user)
+        save(user, db)
         return true
   return false
 
 proc getUserGroup*(db: DbConn, groupId: int64): Option[UserGroup] =
-  try:
-    var group = newUserGroup()
-    db.select(group, "id = $1", groupId)
-    if group.id != 0:
-      return some(group)
-  except:
-    discard
-  return none(UserGroup)
+  return find(UserGroup, groupId.int, db)

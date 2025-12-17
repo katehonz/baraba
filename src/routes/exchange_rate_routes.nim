@@ -1,6 +1,6 @@
 import std/json
 import jester
-import norm/postgres
+import orm/orm
 
 import ../db/config
 import ../models/exchangerate
@@ -11,10 +11,7 @@ proc exchangeRateRoutes*(): auto =
     get "/api/exchange-rates":
       let db = getDbConn()
       try:
-        var rates = @[newExchangeRate()]
-        db.selectAll(rates)
-        if rates.len == 1 and rates[0].id == 0:
-          rates = @[]
+        let rates = findAll(ExchangeRate, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(rates)
       finally:
         releaseDbConn(db)

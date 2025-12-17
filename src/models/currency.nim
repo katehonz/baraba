@@ -1,9 +1,9 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 
 type
-  Currency* = ref object of Model
-    code* {.unique.}: string
+  Currency* = object of Model
+    code*: string
     name*: string
     name_bg*: string
     symbol*: string
@@ -25,6 +25,7 @@ proc newCurrency*(
   bnb_code = ""
 ): Currency =
   Currency(
+    id: 0,
     code: code,
     name: name,
     name_bg: name_bg,

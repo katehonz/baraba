@@ -1,6 +1,6 @@
 import std/[json, strutils]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../models/currency
 import ../db/config
@@ -11,10 +11,7 @@ proc currencyRoutes*(): auto =
     get "/api/currencies":
       let db = getDbConn()
       try:
-        var currencies = @[newCurrency()]
-        db.selectAll(currencies)
-        if currencies.len == 1 and currencies[0].id == 0:
-          currencies = @[]
+        let currencies = findAll(Currency, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(currencies)
       finally:
         releaseDbConn(db)
@@ -32,7 +29,7 @@ proc currencyRoutes*(): auto =
           is_base_currency = body.getOrDefault("isBaseCurrency").getBool(false),
           is_active = body.getOrDefault("isActive").getBool(true)
         )
-        db.insert(currency)
+        save(currency, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(currency)
       finally:
         releaseDbConn(db)
@@ -42,19 +39,19 @@ proc currencyRoutes*(): auto =
       let body = parseJson(request.body)
       let db = getDbConn()
       try:
-        var currency = newCurrency()
-        db.select(currency, "id = $1", id)
-        if currency.id == 0:
-          resp Http404, {"Content-Type": "application/json"}, """{"error": "Currency not found"}"""
-        else:
+        var currencyOpt = find(Currency, id, db)
+        if currencyOpt.isSome:
+          var currency = currencyOpt.get()
           if body.hasKey("isActive"):
             currency.is_active = body["isActive"].getBool()
           if body.hasKey("code"):
             currency.code = body["code"].getStr()
           if body.hasKey("name"):
             currency.name = body["name"].getStr()
-          db.update(currency)
+          save(currency, db)
           resp Http200, {"Content-Type": "application/json"}, $toJson(currency)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Currency not found"}"""
       finally:
         releaseDbConn(db)
 

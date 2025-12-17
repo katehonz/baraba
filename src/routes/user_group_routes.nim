@@ -1,6 +1,6 @@
 import std/[json, strutils]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../db/config
 import ../models/user
@@ -11,10 +11,7 @@ proc userGroupRoutes*(): auto =
     get "/api/user-groups":
       let db = getDbConn()
       try:
-        var groups = @[newUserGroup()]
-        db.selectAll(groups)
-        if groups.len == 1 and groups[0].id == 0:
-          groups = @[]
+        let groups = findAll(UserGroup, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(groups)
       finally:
         releaseDbConn(db)

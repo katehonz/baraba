@@ -1,9 +1,9 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import enums, company
 
 type
-  Account* = ref object of Model
+  Account* = object of Model
     code*: string
     name*: string
     description*: string
@@ -16,7 +16,7 @@ type
     is_analytical*: bool
     supports_quantities*: bool
     default_unit*: string
-    company_id* {.fk: Company.}: int64
+    company_id*: int64
     parent_id*: Option[int64]
     created_at*: DateTime
     updated_at*: DateTime
@@ -38,6 +38,7 @@ proc newAccount*(
   parent_id: Option[int64] = none(int64)
 ): Account =
   Account(
+    id: 0,
     code: code,
     name: name,
     description: description,

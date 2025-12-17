@@ -2,7 +2,7 @@ import std/[json, times, options]
 
 proc toJson*[T](obj: T): JsonNode =
   result = %*{}
-  for name, value in obj[].fieldPairs:
+  for name, value in fieldPairs(obj):
     when value is Option:
       if value.isSome:
         when value.get is DateTime:

@@ -1,6 +1,6 @@
 import std/[json, times, options, strutils]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../db/config
 import ../models/vatrate
@@ -12,13 +12,11 @@ proc vatRateRoutes*(): auto =
       let companyId = request.params.getOrDefault("companyId", "0").parseInt
       let db = getDbConn()
       try:
-        var rates = @[newVatRate()]
+        var rates: seq[VatRate]
         if companyId > 0:
-          db.select(rates, "company_id = $1", companyId)
+          rates = findWhere(VatRate, db, "company_id = $1", $companyId)
         else:
-          db.selectAll(rates)
-        if rates.len == 1 and rates[0].id == 0:
-          rates = @[]
+          rates = findAll(VatRate, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(rates)
       finally:
         releaseDbConn(db)
@@ -35,7 +33,7 @@ proc vatRateRoutes*(): auto =
         )
         if body.hasKey("effectiveFrom"):
           vatRate.valid_from = some(parse(body["effectiveFrom"].getStr(), "yyyy-MM-dd"))
-        db.insert(vatRate)
+        save(vatRate, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(vatRate)
       finally:
         releaseDbConn(db)
@@ -44,13 +42,15 @@ proc vatRateRoutes*(): auto =
       let id = parseInt(@"id")
       let db = getDbConn()
       try:
-        var vatRate = newVatRate()
-        db.select(vatRate, "id = $1", id)
-        if vatRate.id == 0:
+        let vatRateOpt = find(VatRate, id, db)
+        if vatRateOpt.isNone:
           resp Http404, {"Content-Type": "application/json"}, """{"error": "VAT rate not found"}"""
-        else:
-          db.delete(vatRate)
-          resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+          return
+
+        deleteById(VatRate, id, db)
+        resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+      except:
+        resp Http500, {"Content-Type": "application/json"}, """{"error": "Internal server error"}"""
       finally:
         releaseDbConn(db)
 

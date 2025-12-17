@@ -1,9 +1,9 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import company
 
 type
-  Counterpart* = ref object of Model
+  Counterpart* = object of Model
     name*: string
     eik*: string
     vat_number*: string
@@ -21,7 +21,7 @@ type
     is_supplier*: bool
     is_vat_registered*: bool
     is_active*: bool
-    company_id* {.fk: Company.}: int64
+    company_id*: int64
     created_at*: DateTime
     updated_at*: DateTime
 
@@ -40,6 +40,7 @@ proc newCounterpart*(
   company_id: int64 = 0
 ): Counterpart =
   Counterpart(
+    id: 0,
     name: name,
     eik: eik,
     vat_number: vat_number,

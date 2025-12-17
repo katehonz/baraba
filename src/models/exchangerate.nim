@@ -1,9 +1,9 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import currency, user
 
 type
-  ExchangeRate* = ref object of Model
+  ExchangeRate* = object of Model
     rate*: float
     reverse_rate*: float
     valid_date*: DateTime
@@ -11,8 +11,8 @@ type
     bnb_rate_id*: string
     is_active*: bool
     notes*: string
-    from_currency_id* {.fk: Currency.}: int64
-    to_currency_id* {.fk: Currency.}: int64
+    from_currency_id*: int64
+    to_currency_id*: int64
     created_by_id*: Option[int64]
     created_at*: DateTime
     updated_at*: DateTime
@@ -26,6 +26,7 @@ proc newExchangeRate*(
   to_currency_id: int64 = 0
 ): ExchangeRate =
   ExchangeRate(
+    id: 0,
     rate: rate,
     reverse_rate: reverse_rate,
     valid_date: valid_date,

@@ -1,11 +1,11 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import currency
 
 type
-  Company* = ref object of Model
+  Company* = object of Model
     name*: string
-    eik* {.unique.}: string
+    eik*: string
     vat_number*: string
     address*: string
     city*: string
@@ -22,7 +22,7 @@ type
     enable_vies_validation*: bool
     enable_ai_mapping*: bool
     auto_validate_on_import*: bool
-    base_currency_id* {.fk: Currency.}: int64
+    base_currency_id*: int64
     default_cash_account_id*: Option[int64]
     default_customers_account_id*: Option[int64]
     default_suppliers_account_id*: Option[int64]
@@ -61,6 +61,7 @@ proc newCompany*(
   salt_edge_enabled: bool = false
 ): Company =
   Company(
+    id: 0,
     name: name,
     eik: eik,
     vat_number: vat_number,
@@ -106,7 +107,7 @@ proc getAccountId*(company: Company, fieldName: string): Option[int64] =
   of "defaultCardPaymentSalesAccountId": return company.default_card_payment_sales_account_id
   else: return none(int64)
 
-proc `setAccountId`*(company: Company, fieldName: string, accountId: Option[int64]) =
+proc `setAccountId`*(company: var Company, fieldName: string, accountId: Option[int64]) =
   case fieldName
   of "defaultCashAccountId": company.default_cash_account_id = accountId
   of "defaultCustomersAccountId": company.default_customers_account_id = accountId

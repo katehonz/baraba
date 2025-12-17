@@ -1,6 +1,6 @@
 import std/[json, strutils, times]
 import jester
-import norm/postgres
+import orm/orm
 
 import ../db/config
 import ../models/user
@@ -12,10 +12,7 @@ proc userRoutes*(): auto =
     get "/api/users":
       let db = getDbConn()
       try:
-        var users = @[newUser()]
-        db.selectAll(users)
-        if users.len == 1 and users[0].id == 0:
-          users = @[]
+        let users = findAll(User, db)
         var usersJson = newJArray()
         for user in users:
           usersJson.add(%*{
@@ -50,11 +47,9 @@ proc userRoutes*(): auto =
       let body = parseJson(request.body)
       let db = getDbConn()
       try:
-        var user = newUser()
-        db.select(user, "id = $1", id)
-        if user.id == 0:
-          resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
-        else:
+        var userOpt = find(User, id, db)
+        if userOpt.isSome:
+          var user = userOpt.get()
           if body.hasKey("username"):
             user.username = body["username"].getStr()
           if body.hasKey("email"):
@@ -67,8 +62,10 @@ proc userRoutes*(): auto =
             user.group_id = body["groupId"].getInt().int64
           if body.hasKey("isActive"):
             user.is_active = body["isActive"].getBool()
-          db.update(user)
+          save(user, db)
           resp Http200, {"Content-Type": "application/json"}, $toJson(user)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
       finally:
         releaseDbConn(db)
 
@@ -76,13 +73,15 @@ proc userRoutes*(): auto =
       let id = parseInt(@"id")
       let db = getDbConn()
       try:
-        var user = newUser()
-        db.select(user, "id = $1", id)
-        if user.id == 0:
+        let userOpt = find(User, id, db)
+        if userOpt.isNone:
           resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
-        else:
-          db.delete(user)
-          resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+          return
+
+        deleteById(User, id, db)
+        resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+      except:
+        resp Http500, {"Content-Type": "application/json"}, """{"error": "Internal server error"}"""
       finally:
         releaseDbConn(db)
 
@@ -91,16 +90,16 @@ proc userRoutes*(): auto =
       let body = parseJson(request.body)
       let db = getDbConn()
       try:
-        var user = newUser()
-        db.select(user, "id = $1", id)
-        if user.id == 0:
-          resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
-        else:
+        var userOpt = find(User, id, db)
+        if userOpt.isSome:
+          var user = userOpt.get()
           let newSalt = $epochTime()
           user.password = hashPassword(body["newPassword"].getStr(), newSalt)
           user.salt = newSalt
-          db.update(user)
+          save(user, db)
           resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+        else:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
       finally:
         releaseDbConn(db)
 

@@ -1,6 +1,6 @@
 ## GraphQL Resolvers for Baraba
 import std/[json, strutils, options, times, tables, math]
-import norm/postgres
+import orm/orm
 import "../vendor/nim-graphql/graphql/api"
 import ../db/config
 import ../models/[user, company, account, counterpart, journal]
@@ -51,9 +51,8 @@ proc queryCompanies(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var companies = @[newCompany()]
-    db.selectAll(companies)
-    if companies.len == 1 and companies[0].id == 0:
+    let companies = findAll(Company, db)
+    if companies.len == 0:
       return ok(respList())
 
     var list = respList()
@@ -86,8 +85,10 @@ proc queryCompany(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl, 
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var company = newCompany()
-    db.select(company, "id = $1", id)
+    let companyOpt = find(Company, id.int, db)
+    if companyOpt.isNone:
+      return ok(respNull())
+    let company = companyOpt.get()
     var item = respMap(typeName)
     item["id"] = resp(company.id)
     item["name"] = resp(company.name)
@@ -113,13 +114,13 @@ proc queryAccounts(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl,
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var accounts = @[newAccount()]
+    var accounts: seq[Account]
     if companyId != 0:
-      db.select(accounts, "company_id = $1 ORDER BY code", companyId)
+      accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $companyId)
     else:
-      db.selectAll(accounts)
+      accounts = findAll(Account, db)
 
-    if accounts.len == 1 and accounts[0].id == 0:
+    if accounts.len == 0:
       return ok(respList())
 
     var list = respList()
@@ -157,13 +158,13 @@ proc queryCounterparts(ud: RootRef, params: Args, parent: Node): RespResult {.cd
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var counterparts = @[newCounterpart()]
+    var counterparts: seq[Counterpart]
     if companyId != 0:
-      db.select(counterparts, "company_id = $1 ORDER BY name", companyId)
+      counterparts = findWhere(Counterpart, db, "company_id = $1 ORDER BY name", $companyId)
     else:
-      db.selectAll(counterparts)
+      counterparts = findAll(Counterpart, db)
 
-    if counterparts.len == 1 and counterparts[0].id == 0:
+    if counterparts.len == 0:
       return ok(respList())
 
     var list = respList()
@@ -196,13 +197,13 @@ proc queryJournalEntries(ud: RootRef, params: Args, parent: Node): RespResult {.
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var entries = @[newJournalEntry()]
+    var entries: seq[JournalEntry]
     if companyId != 0:
-      db.select(entries, "company_id = $1 ORDER BY document_date DESC", companyId)
+      entries = findWhere(JournalEntry, db, "company_id = $1 ORDER BY document_date DESC", $companyId)
     else:
-      db.selectAll(entries)
+      entries = findAll(JournalEntry, db)
 
-    if entries.len == 1 and entries[0].id == 0:
+    if entries.len == 0:
       return ok(respList())
 
     var list = respList()
@@ -224,10 +225,9 @@ proc queryJournalEntries(ud: RootRef, params: Args, parent: Node): RespResult {.
       item["updatedAt"] = resp($e.updated_at)
 
       # Get entry lines
-      var lines = @[newEntryLine()]
-      db.select(lines, "journal_entry_id = $1 ORDER BY line_order", e.id)
+      let lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $e.id)
       var linesList = respList()
-      if not (lines.len == 1 and lines[0].id == 0):
+      if lines.len > 0:
         for l in lines:
           var lineItem = respMap(lineTypeName)
           lineItem["id"] = resp(l.id)
@@ -261,8 +261,10 @@ proc queryJournalEntry(ud: RootRef, params: Args, parent: Node): RespResult {.cd
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var entry = newJournalEntry()
-    db.select(entry, "id = $1", id)
+    let entryOpt = find(JournalEntry, id.int, db)
+    if entryOpt.isNone:
+      return ok(respNull())
+    let entry = entryOpt.get()
 
     var item = respMap(entryTypeName)
     item["id"] = resp(entry.id)
@@ -281,10 +283,9 @@ proc queryJournalEntry(ud: RootRef, params: Args, parent: Node): RespResult {.cd
     item["updatedAt"] = resp($entry.updated_at)
 
     # Get entry lines
-    var lines = @[newEntryLine()]
-    db.select(lines, "journal_entry_id = $1 ORDER BY line_order", id)
+    let lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $id)
     var linesList = respList()
-    if not (lines.len == 1 and lines[0].id == 0):
+    if lines.len > 0:
       for l in lines:
         var lineItem = respMap(lineTypeName)
         lineItem["id"] = resp(l.id)
@@ -304,9 +305,11 @@ proc queryJournalEntry(ud: RootRef, params: Args, parent: Node): RespResult {.cd
   except CatchableError as e:
     err(e.msg)
 
+{.pop.}
+
 # ============= MUTATION RESOLVERS =============
 
-proc mutationLogin(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl, gcsafe, raises: [].} =
+proc mutationLogin(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl, gcsafe.} =
   try:
     let ctx = GraphqlRef(ud)
     let userTypeName = ctx.createName("User")
@@ -337,7 +340,7 @@ proc mutationLogin(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl,
   except CatchableError as e:
     err(e.msg)
 
-proc mutationPostJournalEntry(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl, gcsafe, raises: [].} =
+proc mutationPostJournalEntry(ud: RootRef, params: Args, parent: Node): RespResult {.cdecl, gcsafe.} =
   try:
     let ctx = GraphqlRef(ud)
     let entryTypeName = ctx.createName("JournalEntry")
@@ -347,8 +350,10 @@ proc mutationPostJournalEntry(ud: RootRef, params: Args, parent: Node): RespResu
     let db = getDbConn()
     defer: releaseDbConn(db)
 
-    var entry = newJournalEntry()
-    db.select(entry, "id = $1", id)
+    let entryOpt = find(JournalEntry, id.int, db)
+    if entryOpt.isNone:
+      return err("Записът не е намерен")
+    var entry = entryOpt.get()
 
     if entry.is_posted:
       return err("Записът вече е осчетоводен")
@@ -356,10 +361,10 @@ proc mutationPostJournalEntry(ud: RootRef, params: Args, parent: Node): RespResu
     # Validate debit = credit
     var debitSum, creditSum: float64
     try:
-      let rows = db.getAllRows(sql"""
+      let rows = rawQuery(db, """
         SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0)
-        FROM "EntryLine" WHERE journal_entry_id = $1
-      """, id)
+        FROM entry_lines WHERE journal_entry_id = $1
+      """, $id)
       if rows.len > 0:
         debitSum = parseFloat($rows[0][0])
         creditSum = parseFloat($rows[0][1])
@@ -371,7 +376,7 @@ proc mutationPostJournalEntry(ud: RootRef, params: Args, parent: Node): RespResu
     entry.is_posted = true
     entry.posted_at = some(now())
     entry.updated_at = now()
-    db.update(entry)
+    save(entry, db)
 
     var item = respMap(entryTypeName)
     item["id"] = resp(entry.id)
@@ -384,8 +389,6 @@ proc mutationPostJournalEntry(ud: RootRef, params: Args, parent: Node): RespResu
     ok(item)
   except CatchableError as e:
     err(e.msg)
-
-{.pop.}
 
 # ============= FIELD RESOLVERS =============
 

@@ -1,17 +1,17 @@
 import std/[times, options]
-import norm/[model, pragmas]
+import orm/orm
 import company
 
 type
-  VatRate* = ref object of Model
-    code* {.unique.}: string
+  VatRate* = object of Model
+    code*: string
     name*: string
     rate*: float
     vat_direction*: string
     is_active*: bool
     valid_from*: Option[DateTime]
     valid_to*: Option[DateTime]
-    company_id* {.fk: Company.}: int64
+    company_id*: int64
     created_at*: DateTime
     updated_at*: DateTime
 
@@ -24,6 +24,7 @@ proc newVatRate*(
   company_id: int64 = 0
 ): VatRate =
   VatRate(
+    id: 0,
     code: code,
     name: name,
     rate: rate,

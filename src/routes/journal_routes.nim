@@ -1,6 +1,6 @@
 import std/[json, strutils, options, times, strformat]
 import jester
-import norm/[model, postgres]
+import orm/orm
 
 import ../models/journal
 import ../db/config
@@ -13,13 +13,11 @@ proc journalRoutes*(): auto =
       let companyId = request.params.getOrDefault("companyId", "0")
       let db = getDbConn()
       try:
-        var entries = @[newJournalEntry()]
+        var entries: seq[JournalEntry]
         if companyId != "0":
-          db.select(entries, "company_id = $1 ORDER BY document_date DESC", parseInt(companyId))
+          entries = findWhere(JournalEntry, db, "company_id = $1 ORDER BY document_date DESC", companyId)
         else:
-          db.selectAll(entries)
-        if entries.len == 1 and entries[0].id == 0:
-          entries = @[]
+          entries = findAll(JournalEntry, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(entries)
       finally:
         releaseDbConn(db)
@@ -28,19 +26,18 @@ proc journalRoutes*(): auto =
       let entryId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var entry = newJournalEntry()
-        db.select(entry, "id = $1", entryId)
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isSome:
+          let entry = entryOpt.get()
+          let lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $entryId)
 
-        var lines = @[newEntryLine()]
-        db.select(lines, "journal_entry_id = $1 ORDER BY line_order", entryId)
-
-        let response = %*{
-          "entry": toJson(entry),
-          "lines": toJsonArray(lines)
-        }
-        resp Http200, {"Content-Type": "application/json"}, $response
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          let response = %*{
+            "entry": toJson(entry),
+            "lines": toJsonArray(lines)
+          }
+          resp Http200, {"Content-Type": "application/json"}, $response
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
       finally:
         releaseDbConn(db)
 
@@ -56,8 +53,8 @@ proc journalRoutes*(): auto =
           company_id = body["companyId"].getBiggestInt(),
           created_by_id = body.getOrDefault("createdById").getBiggestInt(1)
         )
-        db.insert(entry)
-        
+        save(entry, db)
+
         # This is a simplified version from baraba.nim, the original file had line item insertion
         # which is more complex and requires more context on the models.
         # For now, keeping it simple.
@@ -73,15 +70,16 @@ proc journalRoutes*(): auto =
       let entryId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var entry = newJournalEntry()
-        db.select(entry, "id = $1", entryId)
-        entry.is_posted = true
-        entry.posted_at = some(now())
-        entry.updated_at = now()
-        db.update(entry)
-        resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+        var entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isSome:
+          var entry = entryOpt.get()
+          entry.is_posted = true
+          entry.posted_at = some(now())
+          entry.updated_at = now()
+          save(entry, db)
+          resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
       finally:
         releaseDbConn(db)
 
@@ -89,15 +87,16 @@ proc journalRoutes*(): auto =
       let entryId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var entry = newJournalEntry()
-        db.select(entry, "id = $1", entryId)
-        entry.is_posted = false
-        entry.posted_at = none(DateTime)
-        entry.updated_at = now()
-        db.update(entry)
-        resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+        var entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isSome:
+          var entry = entryOpt.get()
+          entry.is_posted = false
+          entry.posted_at = none(DateTime)
+          entry.updated_at = now()
+          save(entry, db)
+          resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+        else:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
       finally:
         releaseDbConn(db)
 
@@ -105,16 +104,17 @@ proc journalRoutes*(): auto =
       let entryId = parseInt(@"id")
       let db = getDbConn()
       try:
-        var entry = newJournalEntry()
-        db.select(entry, "id = $1", entryId)
-        if entry.is_posted:
-          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтриете осчетоводен запис"})
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isSome:
+          var entry = entryOpt.get()
+          if entry.is_posted:
+            resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтриете осчетоводен запис"})
+          else:
+            rawExec(db, "DELETE FROM entry_lines WHERE journal_entry_id = $1", $entryId)
+            delete(entry, db)
+            resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
         else:
-          db.exec(sql(fmt"""DELETE FROM "entry_line" WHERE "journal_entry_id" = {entryId}"""))
-          db.delete(entry)
-          resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
       finally:
         releaseDbConn(db)
 
