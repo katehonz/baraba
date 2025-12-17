@@ -1,7 +1,8 @@
 ## Database migration script
 ## Run this to create/update all tables
 
-import norm/[model, postgres]
+import orm/orm
+import lowdb/postgres
 import std/[times, os]
 import ../models/[user, currency, company, account, counterpart, vatrate, journal, exchangerate, audit_log, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile]
 
@@ -11,20 +12,20 @@ proc getDb(): DbConn =
 proc runMigration*() =
   let db = getDb()
   echo "Starting migration..."
-  db.createTables(newUser())
-  db.createTables(newCurrency())
-  db.createTables(newCompany())
-  db.createTables(newAccount())
-  db.createTables(newCounterpart())
-  db.createTables(newVatRate())
-  db.createTables(newJournalEntry())
-  db.createTables(newEntryLine())
-  db.createTables(newExchangeRate())
-  db.createTables(newAuditLog())
-  db.createTables(newFixedAssetCategory())
-  db.createTables(newFixedAsset())
-  db.createTables(newDepreciationJournal())
-  db.createTables(newBankProfile())
+  db.createTable(User)
+  db.createTable(Currency)
+  db.createTable(Company)
+  db.createTable(Account)
+  db.createTable(Counterpart)
+  db.createTable(VatRate)
+  db.createTable(JournalEntry)
+  db.createTable(EntryLine)
+  db.createTable(ExchangeRate)
+  db.createTable(AuditLog)
+  db.createTable(FixedAssetCategory)
+  db.createTable(FixedAsset)
+  db.createTable(DepreciationJournal)
+  db.createTable(BankProfile)
   echo "Migration finished."
   db.close()
 

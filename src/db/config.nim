@@ -1,7 +1,7 @@
 ## Database configuration and connection pool for norm ORM
 ## Thread-safe connection pool for multi-threaded servers
 import std/[locks, sequtils, atomics]
-import "../../vendor/lowdb_baraba/lowdb/postgres"
+import lowdb/postgres
 
 export postgres
 
