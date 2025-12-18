@@ -26,7 +26,10 @@ import graphql/resolvers
 import "vendor/nim-graphql/graphql"
 
 # Import route handlers
+import routes/company_routes
 import routes/currency_routes
+import routes/account_routes
+import routes/counterpart_routes
 import routes/audit_log_routes
 import routes/exchange_rate_routes
 import routes/vat_rate_routes
@@ -52,99 +55,36 @@ const corsHeaders* = @{
   "Access-Control-Allow-Headers": "Content-Type, Authorization"
 }
 
-const jsonCors* = @{
-  "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization"
-}
-
 router mainRouter:
-  # =====================
-  # CORS preflight
-  # =====================
-  options "/api/auth/login": resp Http200, corsHeaders, ""
-  options "/api/auth/register": resp Http200, corsHeaders, ""
-  options "/api/auth/me": resp Http200, corsHeaders, ""
-  options "/api/auth/recover-password": resp Http200, corsHeaders, ""
-  options "/api/auth/reset-password": resp Http200, corsHeaders, ""
-  options "/api/companies": resp Http200, corsHeaders, ""
-  options "/api/companies/@id": resp Http200, corsHeaders, ""
-  options "/api/accounts": resp Http200, corsHeaders, ""
-  options "/api/accounts/company/@companyId": resp Http200, corsHeaders, ""
-  options "/api/counterparts": resp Http200, corsHeaders, ""
-  options "/api/counterparts/@id": resp Http200, corsHeaders, ""
-  options "/api/counterparts/company/@companyId": resp Http200, corsHeaders, ""
-  options "/api/currencies": resp Http200, corsHeaders, ""
-  options "/api/currencies/@id": resp Http200, corsHeaders, ""
-  options "/api/audit-logs": resp Http200, corsHeaders, ""
-  options "/api/audit-log-stats": resp Http200, corsHeaders, ""
-  options "/api/monthly-stats": resp Http200, corsHeaders, ""
-  options "/api/exchange-rates": resp Http200, corsHeaders, ""
-  options "/api/exchange-rates/fetch-ecb": resp Http200, corsHeaders, ""
-  options "/api/vat-rates": resp Http200, corsHeaders, ""
-  options "/api/vat-rates/@id": resp Http200, corsHeaders, ""
-  options "/api/vat/generate/@period": resp Http200, corsHeaders, ""
-  options "/api/users": resp Http200, corsHeaders, ""
-  options "/api/users/@id": resp Http200, corsHeaders, ""
-  options "/api/users/@id/reset-password": resp Http200, corsHeaders, ""
-  options "/api/user-groups": resp Http200, corsHeaders, ""
-  options "/api/fixed-asset-categories": resp Http200, corsHeaders, ""
-  options "/api/banks": resp Http200, corsHeaders, ""
-  options "/api/banks/@id": resp Http200, corsHeaders, ""
-  options "/api/fixed-assets": resp Http200, corsHeaders, ""
-  options "/api/fixed-assets/@id": resp Http200, corsHeaders, ""
-  options "/api/fixed-assets/calculate-depreciation": resp Http200, corsHeaders, ""
-  options "/api/fixed-assets/post-depreciation": resp Http200, corsHeaders, ""
-  options "/api/depreciation-journal": resp Http200, corsHeaders, ""
-  options "/api/calculated-periods": resp Http200, corsHeaders, ""
-  options "/api/validate-vat": resp Http200, corsHeaders, ""
-  options "/api/journal-entries": resp Http200, corsHeaders, ""
-  options "/api/journal-entries/@id": resp Http200, corsHeaders, ""
-  options "/api/journal-entries/@id/post": resp Http200, corsHeaders, ""
-  options "/api/journal-entries/@id/unpost": resp Http200, corsHeaders, ""
-  options "/api/entry-lines": resp Http200, corsHeaders, ""
-  options "/api/entry-lines/@id": resp Http200, corsHeaders, ""
-  options "/api/reports/turnover-sheet": resp Http200, corsHeaders, ""
-  options "/api/reports/general-ledger": resp Http200, corsHeaders, ""
-  options "/api/system-settings": resp Http200, corsHeaders, ""
-  options "/api/system-settings/smtp": resp Http200, corsHeaders, ""
-  options "/api/system-settings/smtp/test": resp Http200, corsHeaders, ""
-  options "/api/companies/@id/salt-edge": resp Http200, corsHeaders, ""
-  options "/api/scan-invoice": resp Http200, corsHeaders, ""
-  options "/api/scanned-invoices": resp Http200, corsHeaders, ""
-  options "/api/scanned-invoices/@id": resp Http200, corsHeaders, ""
-  options "/api/scanned-invoices/@id/process": resp Http200, corsHeaders, ""
-  options "/api/vat-returns": resp Http200, corsHeaders, ""
-  options "/graphql": resp Http200, corsHeaders, ""
-  options "/*": resp Http200, corsHeaders, ""
+  # Handle CORS preflight requests
+  options "/**":
+    resp Http200, corsHeaders, ""
 
   # =====================
   # Health check
   # =====================
   get "/":
-    resp Http200, jsonCors, $(%*{
+    resp Http200, corsHeaders, $(%*{
       "name": "Baraba API",
       "version": "0.1.0",
       "description": "Счетоводна програма REST API"
     })
 
   get "/health":
-    resp Http200, jsonCors, $(%*{"status": "ok"})
+    resp Http200, corsHeaders, $(%*{"status": "ok"})
 
   # =====================
   # VAT ROUTES
   # =====================
   post "/api/vat/generate/@period":
-    let period = @"period"
-    let body = parseJson(request.body)
-    let companyId = body["companyId"].getInt()
+    withDb:
+      let period = @"period"
+      let body = parseJson(request.body)
+      let companyId = body["companyId"].getInt()
 
-    let db = getDbConn()
-    try:
       let companyOpt = find(Company, companyId, db)
       if companyOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
         return
       let company = companyOpt.get()
 
@@ -155,15 +95,13 @@ router mainRouter:
         "PRODAGBI.TXT": encode(sales),
         "DEKLAR.TXT": encode(deklar)
       }
-      resp Http200, jsonCors, $response
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $response
 
   # =====================
   # SYSTEM SETTINGS
   # =====================
   get "/api/system-settings":
-    resp Http200, jsonCors, $(%*{
+    resp Http200, {"Content-Type": "application/json"}, $(%*{
       "smtpHost": "smtp.example.com",
       "smtpPort": 587,
       "smtpUsername": "user@example.com",
@@ -178,475 +116,127 @@ router mainRouter:
   put "/api/system-settings/smtp":
     let body = parseJson(request.body)
     # TODO: Implement saving of SMTP settings
-    resp Http200, jsonCors, $(%*{"success": true})
+    resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
 
   post "/api/system-settings/smtp/test":
     let body = parseJson(request.body)
     let testEmail = body["testEmail"].getStr()
     # TODO: Implement sending of test email
     echo "Sending test email to " & testEmail
-    resp Http200, jsonCors, $(%*{"success": true})
+    resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
 
   put "/api/companies/@id/salt-edge":
     let companyId = parseInt(@"id")
     let body = parseJson(request.body)
     # TODO: Implement saving of SaltEdge settings
-    resp Http200, jsonCors, $(%*{"success": true})
+    resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
 
   # =====================
   # AUTH ROUTES
   # =====================
   post "/api/auth/login":
-    let body = parseJson(request.body)
-    let username = body["username"].getStr()
-    let password = body["password"].getStr()
+    withDb:
+      let body = parseJson(request.body)
+      let username = body["username"].getStr()
+      let password = body["password"].getStr()
 
-    let db = getDbConn()
-    let userOpt = authenticateUser(db, username, password)
-    releaseDbConn(db)
+      let userOpt = authenticateUser(db, username, password)
 
-    if userOpt.isSome:
-      let user = userOpt.get
-      let token = generateToken(user.id, user.username)
-      resp Http200, jsonCors, $(%*{
-        "token": token,
-        "user": {"id": user.id, "username": user.username, "email": user.email}
-      })
-    else:
-      resp Http401, jsonCors, $(%*{"error": "Невалидно потребителско име или парола"})
+      if userOpt.isSome:
+        let user = userOpt.get
+        let token = generateToken(user.id, user.username)
+        resp Http200, {"Content-Type": "application/json"}, $(%*{
+          "token": token,
+          "user": {"id": user.id, "username": user.username, "email": user.email}
+        })
+      else:
+        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалидно потребителско име или парола"})
 
   post "/api/auth/register":
-    let body = parseJson(request.body)
-    let username = body["username"].getStr()
-    let email = body["email"].getStr()
-    let password = body["password"].getStr()
-    let groupId = body.getOrDefault("groupId").getBiggestInt(2)
+    withDb:
+      let body = parseJson(request.body)
+      let username = body["username"].getStr()
+      let email = body["email"].getStr()
+      let password = body["password"].getStr()
+      let groupId = body.getOrDefault("groupId").getBiggestInt(2)
 
-    let db = getDbConn()
-    try:
-      let user = createUser(db, username, email, password, groupId)
-      let token = generateToken(user.id, user.username)
-      resp Http201, jsonCors, $(%*{
-        "token": token,
-        "user": {"id": user.id, "username": user.username, "email": user.email}
-      })
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+      try:
+        let user = createUser(db, username, email, password, groupId)
+        let token = generateToken(user.id, user.username)
+        resp Http201, {"Content-Type": "application/json"}, $(%*{
+          "token": token,
+          "user": {"id": user.id, "username": user.username, "email": user.email}
+        })
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   get "/api/auth/me":
     let authHeader = request.headers.getOrDefault("Authorization")
     if authHeader.len == 0 or not authHeader.startsWith("Bearer "):
-      resp Http401, jsonCors, $(%*{"error": "Липсва токен"})
+      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Липсва токен"})
 
     let token = authHeader[7..^1]
     let (valid, userId, _) = verifyToken(token)
     if not valid:
-      resp Http401, jsonCors, $(%*{"error": "Невалиден токен"})
+      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалиден токен"})
 
-    let db = getDbConn()
-    let userOpt = getUserById(db, userId)
-    releaseDbConn(db)
-
-    if userOpt.isSome:
-      let user = userOpt.get
-      resp Http200, jsonCors, $(%*{
-        "id": user.id, "username": user.username, "email": user.email
-      })
-    else:
-      resp Http404, jsonCors, $(%*{"error": "Потребителят не е намерен"})
+    withDb:
+      let userOpt = getUserById(db, userId)
+      if userOpt.isSome:
+        let user = userOpt.get
+        resp Http200, {"Content-Type": "application/json"}, $(%*{
+          "id": user.id, "username": user.username, "email": user.email
+        })
+      else:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Потребителят не е намерен"})
 
   post "/api/auth/recover-password":
-    let body = parseJson(request.body)
-    let email = body["email"].getStr()
-    
-    let db = getDbConn()
-    let tokenOpt = recoverPassword(db, email)
-    releaseDbConn(db)
+    withDb:
+      let body = parseJson(request.body)
+      let email = body["email"].getStr()
+      let tokenOpt = recoverPassword(db, email)
 
-    if tokenOpt.isSome:
-      resp Http200, jsonCors, $(%*{"message": "Изпратен е линк за възстановяване на паролата на вашия имейл."})
-    else:
-      resp Http404, jsonCors, $(%*{"error": "Потребител с този имейл не е намерен"})
+      if tokenOpt.isSome:
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"message": "Изпратен е линк за възстановяване на паролата на вашия имейл."})
+      else:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Потребител с този имейл не е намерен"})
 
   post "/api/auth/reset-password":
-    let body = parseJson(request.body)
-    let email = body["email"].getStr()
-    let token = body["token"].getStr()
-    let newPassword = body["password"].getStr()
+    withDb:
+      let body = parseJson(request.body)
+      let email = body["email"].getStr()
+      let token = body["token"].getStr()
+      let newPassword = body["password"].getStr()
+      let success = resetPassword(db, email, token, newPassword)
 
-    let db = getDbConn()
-    let success = resetPassword(db, email, token, newPassword)
-    releaseDbConn(db)
-
-    if success:
-      resp Http200, jsonCors, $(%*{"message": "Паролата е променена успешно!"})
-    else:
-      resp Http400, jsonCors, $(%*{"error": "Невалиден токен или изтекло време за възстановяване"})
+      if success:
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"message": "Паролата е променена успешно!"})
+      else:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Невалиден токен или изтекло време за възстановяване"})
 
   # =====================
   # COMPANY ROUTES
   # =====================
-  get "/api/companies":
-    let db = getDbConn()
-    try:
-      let companies = findAll(Company, db)
-      resp Http200, jsonCors, $toJsonArray(companies)
-    finally:
-      releaseDbConn(db)
-
-  get "/api/companies/@id":
-    let companyId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let companyOpt = find(Company, companyId, db)
-      if companyOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Company not found"}"""
-        return
-      let company = companyOpt.get()
-      var companyJson = toJson(company)
-      let fields = [
-        ("defaultCashAccountId", "defaultCashAccount"),
-        ("defaultCustomersAccountId", "defaultCustomersAccount"),
-        ("defaultSuppliersAccountId", "defaultSuppliersAccount"),
-        ("defaultSalesRevenueAccountId", "defaultSalesRevenueAccount"),
-        ("defaultVatPurchaseAccountId", "defaultVatPurchaseAccount"),
-        ("defaultVatSalesAccountId", "defaultVatSalesAccount"),
-        ("defaultCardPaymentPurchaseAccountId", "defaultCardPaymentPurchaseAccount"),
-        ("defaultCardPaymentSalesAccountId", "defaultCardPaymentSalesAccount")
-      ]
-
-      for (field, jsonField) in fields:
-        let accountIdOpt = company.getAccountId(field)
-        if accountIdOpt.isSome:
-          var account = newAccount()
-          let accountOpt2 = find(Account, accountIdOpt.get.int, db)
-          if accountOpt2.isSome:
-            var account = accountOpt2.get()
-          companyJson[jsonField] = toJson(account)
-        else:
-          companyJson[jsonField] = %*{}
-
-      resp Http200, jsonCors, $companyJson
-    except:
-      resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
-    finally:
-      releaseDbConn(db)
-
-  post "/api/companies":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      var baseCurrencyId: int64 = 0
-      let currencies = findWhere(Currency, db, "code = $1", "BGN")
-      if currencies.len > 0:
-        baseCurrencyId = currencies[0].id
-      var company = newCompany(
-        name = body["name"].getStr(),
-        eik = body["eik"].getStr(),
-        vat_number = body.getOrDefault("vatNumber").getStr(""),
-        address = body.getOrDefault("address").getStr(""),
-        city = body.getOrDefault("city").getStr(""),
-        base_currency_id = baseCurrencyId
-      )
-      save(company, db)
-      resp Http201, jsonCors, $toJson(company)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
-
-  put "/api/companies/@id":
-    let companyId = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let companyOpt = find(Company, companyId, db)
-      if companyOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Фирмата не е намерена"}"""
-        return
-      var company = companyOpt.get()
-      if body.hasKey("name"): company.name = body["name"].getStr()
-      if body.hasKey("vatNumber"): company.vat_number = body["vatNumber"].getStr()
-      if body.hasKey("address"): company.address = body["address"].getStr()
-      if body.hasKey("city"): company.city = body["city"].getStr()
-      company.updated_at = now()
-      save(company, db)
-      resp Http200, jsonCors, $toJson(company)
-    except:
-      resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
-    finally:
-      releaseDbConn(db)
-
-  put "/api/companies/@id/default-accounts":
-    let companyId = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let companyOpt = find(Company, companyId, db)
-      if companyOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Фирмата не е намерена"}"""
-        return
-      var company = companyOpt.get()
-
-      let fields = [
-        "defaultCashAccountId",
-        "defaultCustomersAccountId",
-        "defaultSuppliersAccountId",
-        "defaultSalesRevenueAccountId",
-        "defaultVatPurchaseAccountId",
-        "defaultVatSalesAccountId",
-        "defaultCardPaymentPurchaseAccountId",
-        "defaultCardPaymentSalesAccountId"
-      ]
-
-      for field in fields:
-        if body.hasKey(field):
-          if body[field].kind == JNull or body[field].getInt() == 0:
-            company.setAccountId(field, none(int64))
-          else:
-            company.setAccountId(field, some(body[field].getInt().int64))
-      
-      company.updated_at = now()
-      save(company, db)
-      resp Http200, jsonCors, $toJson(company)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
-
-  delete "/api/companies/@id":
-    let companyId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let companyOpt = find(Company, companyId, db)
-      if companyOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Фирмата не е намерена"}"""
-        return
-      var company = companyOpt.get()
-      delete(company, db)
-      resp Http200, jsonCors, $(%*{"success": true})
-    except:
-      resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
-    finally:
-      releaseDbConn(db)
+  # extend companyRoutes()
+  # Company routes are defined in separate file
 
   # =====================
   # ACCOUNT ROUTES
   # =====================
-  get "/api/accounts":
-    let companyId = request.params.getOrDefault("companyId", "0")
-    let db = getDbConn()
-    try:
-      var accounts: seq[Account]
-      if companyId != "0":
-        accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $(parseInt(companyId)))
-      else:
-        accounts = findAll(Account, db)
-      resp Http200, jsonCors, $toJsonArray(accounts)
-    finally:
-      releaseDbConn(db)
-
-  get "/api/accounts/company/@companyId":
-    let companyId = parseInt(@"companyId")
-    let db = getDbConn()
-    try:
-      var accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $companyId)
-      resp Http200, jsonCors, $toJsonArray(accounts)
-    finally:
-      releaseDbConn(db)
-
-  post "/api/accounts":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      var parentId = none(int64)
-      if body.hasKey("parentId") and body["parentId"].kind != JNull:
-        parentId = some(body["parentId"].getBiggestInt())
-      var account = newAccount(
-        code = body["code"].getStr(),
-        name = body["name"].getStr(),
-        account_type = body.getOrDefault("accountType").getStr("ASSET"),
-        company_id = body["companyId"].getBiggestInt(),
-        parent_id = parentId
-      )
-      save(account, db)
-      resp Http201, jsonCors, $toJson(account)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
-
-  get "/api/accounts/@id":
-    let db = getDbConn()
-    try:
-      let accountOpt = find(Account, parseInt(@"id"), db)
-      if accountOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Account not found"})
-        return
-      var account = accountOpt.get()
-      resp Http200, jsonCors, $toJson(account)
-    except:
-      resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+  # extend accountRoutes()
+  # Account routes are defined in separate file
 
   # =====================
   # COUNTERPART ROUTES
   # =====================
-  get "/api/counterparts":
-    # Get companyId from query string: /api/counterparts?companyId=1
-    let queryParams = parseQueryParams(request.query)
-    let companyIdStr = queryParams.getOrDefault("companyId", "")
-    let db = getDbConn()
-    try:
-      var counterparts: seq[Counterpart]
-      if companyIdStr != "" and companyIdStr != "0":
-        counterparts = findWhere(Counterpart, db, "company_id = CAST($1 AS BIGINT) ORDER BY name", companyIdStr)
-      else:
-        # Multi-tenancy: require companyId, return empty if not provided
-        counterparts = @[]
-      resp Http200, jsonCors, $toJsonArray(counterparts)
-    finally:
-      releaseDbConn(db)
-
-  get "/api/counterparts/company/@companyId":
-    let db = getDbConn()
-    try:
-      var counterparts = findWhere(Counterpart, db, "company_id = $1 ORDER BY name", $parseInt(@"companyId"))
-      resp Http200, jsonCors, $toJsonArray(counterparts)
-    finally:
-      releaseDbConn(db)
-
-  post "/api/counterparts":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let name = body["name"].getStr()
-      let eik = body.getOrDefault("eik").getStr("")
-      let companyId = body["companyId"].getBiggestInt()
-
-      # Check for duplicate by name or EIK within the same company
-      var existing: seq[Counterpart]
-      if eik != "":
-        existing = findWhere(Counterpart, db, "company_id = $1 AND (name = $2 OR eik = $3)", $companyId, name, eik)
-      else:
-        existing = findWhere(Counterpart, db, "company_id = $1 AND name = $2", $companyId, name)
-
-      if existing.len > 0:
-        resp Http409, jsonCors, $(%*{"error": "Контрагент с това име или ЕИК вече съществува"})
-        return
-
-      var counterpart = newCounterpart(
-        name = name,
-        eik = eik,
-        company_id = companyId
-      )
-      save(counterpart, db)
-      resp Http201, jsonCors, $toJson(counterpart)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
-
-  get "/api/counterparts/@id":
-    let db = getDbConn()
-    try:
-      let counterpartOpt = find(Counterpart, parseInt(@"id"), db)
-      if counterpartOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Counterpart not found"})
-        return
-      var counterpart = counterpartOpt.get()
-      resp Http200, jsonCors, $toJson(counterpart)
-    except:
-      resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
-
-  put "/api/counterparts/@id":
-    let id = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let counterpartOpt = find(Counterpart, id, db)
-      if counterpartOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Контрагентът не е намерен"})
-        return
-      var counterpart = counterpartOpt.get()
-      if body.hasKey("name"): counterpart.name = body["name"].getStr()
-      if body.hasKey("eik"): counterpart.eik = body["eik"].getStr()
-      if body.hasKey("vatNumber"): counterpart.vat_number = body["vatNumber"].getStr()
-      if body.hasKey("isCustomer"): counterpart.is_customer = body["isCustomer"].getBool()
-      if body.hasKey("isSupplier"): counterpart.is_supplier = body["isSupplier"].getBool()
-      counterpart.updated_at = now()
-      save(counterpart, db)
-      resp Http200, jsonCors, $toJson(counterpart)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
-
-  delete "/api/counterparts/@id":
-    let id = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let counterpartOpt = find(Counterpart, id, db)
-      if counterpartOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Контрагентът не е намерен"})
-        return
-      deleteById(Counterpart, id, db)
-      resp Http200, jsonCors, $(%*{"success": true, "message": "Контрагентът е изтрит"})
-    except:
-      resp Http500, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+  # extend counterpartRoutes()
+  # Counterpart routes are defined in separate file
 
   # =====================
   # CURRENCY ROUTES
   # =====================
-  get "/api/currencies":
-    let db = getDbConn()
-    try:
-      var currencies = findAll(Currency, db)
-      resp Http200, jsonCors, $toJsonArray(currencies)
-    finally:
-      releaseDbConn(db)
-
-  post "/api/currencies":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      var currency = newCurrency(
-        code = body["code"].getStr(),
-        name = body["name"].getStr(),
-        name_bg = body.getOrDefault("nameBg").getStr(""),
-        symbol = body.getOrDefault("symbol").getStr(""),
-        decimal_places = body.getOrDefault("decimalPlaces").getInt(2),
-        is_base_currency = body.getOrDefault("isBaseCurrency").getBool(false),
-        is_active = true
-      )
-      save(currency, db)
-      resp Http201, jsonCors, $toJson(currency)
-    finally:
-      releaseDbConn(db)
-
-  put "/api/currencies/@id":
-    let id = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let currencyOpt = find(Currency, id, db)
-      if currencyOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Currency not found"}"""
-        return
-      var currency = currencyOpt.get()
-      if body.hasKey("isActive"):
-        currency.is_active = body["isActive"].getBool()
-      save(currency, db)
-      resp Http200, jsonCors, $toJson(currency)
-    finally:
-      releaseDbConn(db)
+  # extend currencyRoutes()
+  # Currency routes are defined in separate file
 
   # =====================
   # AUDIT LOG ROUTES
@@ -660,13 +250,13 @@ router mainRouter:
     let offset = request.params.getOrDefault("offset", "0").parseInt
     let limit = request.params.getOrDefault("limit", "50").parseInt
     let logsResult = getAuditLogs(companyId, fromDate, toDate, search, action, offset, limit)
-    resp Http200, jsonCors, logsResult
+    resp Http200, {"Content-Type": "application/json"}, logsResult
 
   get "/api/audit-log-stats":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
     let days = request.params.getOrDefault("days", "30").parseInt
     let statsResult = getAuditLogStats(companyId, days)
-    resp Http200, jsonCors, statsResult
+    resp Http200, {"Content-Type": "application/json"}, statsResult
 
   get "/api/monthly-stats":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
@@ -675,114 +265,105 @@ router mainRouter:
     let toYear = request.params.getOrDefault("toYear", "0").parseInt
     let toMonth = request.params.getOrDefault("toMonth", "0").parseInt
     let monthlyResult = getMonthlyTransactionStats(companyId, fromYear, fromMonth, toYear, toMonth)
-    resp Http200, jsonCors, monthlyResult
+    resp Http200, {"Content-Type": "application/json"}, monthlyResult
 
   # =====================
   # EXCHANGE RATE ROUTES
   # =====================
   get "/api/exchange-rates":
-    let db = getDbConn()
-    try:
+    withDb:
       var rates = findAll(ExchangeRate, db)
-      resp Http200, jsonCors, $toJsonArray(rates)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(rates)
 
   post "/api/exchange-rates/fetch-ecb":
-    let db = getDbConn()
-    try:
-      # Fetch ECB rates XML
-      let client = newHttpClient(timeout = 15000)  # 15 sec timeout
-      defer: client.close()
-      let ecbUrl = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
-      let xmlContent = client.getContent(ecbUrl)
+    withDb:
+      try:
+        # Fetch ECB rates XML
+        let client = newHttpClient(timeout = 15000)  # 15 sec timeout
+        defer: client.close()
+        let ecbUrl = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+        let xmlContent = client.getContent(ecbUrl)
 
-      # Parse XML
-      let xml = parseXml(xmlContent)
+        # Parse XML
+        let xml = parseXml(xmlContent)
 
-      # Find EUR currency (base)
-      var eurCurrency: Currency
-      let eurCurrencies = findWhere(Currency, db, "code = $1", "EUR")
-      if eurCurrencies.len > 0:
-        eurCurrency = eurCurrencies[0]
-      else:
-        # Create EUR if not exists
-        eurCurrency = newCurrency(code = "EUR", name = "Euro", symbol = "€", isBaseCurrency = true, isActive = true)
-        save(eurCurrency, db)
+        # Find EUR currency (base)
+        var eurCurrency: Currency
+        let eurCurrencies = findWhere(Currency, db, "code = $1", "EUR")
+        if eurCurrencies.len > 0:
+          eurCurrency = eurCurrencies[0]
+        else:
+          # Create EUR if not exists
+          eurCurrency = newCurrency(code = "EUR", name = "Euro", symbol = "€", isBaseCurrency = true, isActive = true)
+          save(eurCurrency, db)
 
-      var ratesAdded = 0
-      var ratesDate = ""
+        var ratesAdded = 0
+        var ratesDate = ""
 
-      # Navigate to Cube elements
-      for envelope in xml:
-        if envelope.tag == "Cube":
-          for dateCube in envelope:
-            if dateCube.tag == "Cube" and dateCube.attr("time") != "":
-              ratesDate = dateCube.attr("time")
-              let validDate = parse(ratesDate, "yyyy-MM-dd")
+        # Navigate to Cube elements
+        for envelope in xml:
+          if envelope.tag == "Cube":
+            for dateCube in envelope:
+              if dateCube.tag == "Cube" and dateCube.attr("time") != "":
+                ratesDate = dateCube.attr("time")
+                let validDate = parse(ratesDate, "yyyy-MM-dd")
 
-              for rateCube in dateCube:
-                if rateCube.tag == "Cube":
-                  let currCode = rateCube.attr("currency")
-                  let rateStr = rateCube.attr("rate")
-                  if currCode != "" and rateStr != "":
-                    let rate = parseFloat(rateStr)
+                for rateCube in dateCube:
+                  if rateCube.tag == "Cube":
+                    let currCode = rateCube.attr("currency")
+                    let rateStr = rateCube.attr("rate")
+                    if currCode != "" and rateStr != "":
+                      let rate = parseFloat(rateStr)
 
-                    # Find or create currency
-                    var curr: Currency
-                    let currs = findWhere(Currency, db, "code = $1", currCode)
-                    if currs.len > 0:
-                      curr = currs[0]
-                    else:
-                      curr = newCurrency(code = currCode, name = currCode, isActive = false)
-                      save(curr, db)
+                      # Find or create currency
+                      var curr: Currency
+                      let currs = findWhere(Currency, db, "code = $1", currCode)
+                      if currs.len > 0:
+                        curr = currs[0]
+                      else:
+                        curr = newCurrency(code = currCode, name = currCode, isActive = false)
+                        save(curr, db)
 
-                    # Create new rate (allow duplicates, user can manage them)
-                    var newRate = newExchangeRate(
-                      rate = rate,
-                      reverse_rate = 1.0 / rate,
-                      valid_date = validDate,
-                      rate_source = "ECB",
-                      from_currency_id = eurCurrency.id,
-                      to_currency_id = curr.id
-                    )
-                    save(newRate, db)
-                    ratesAdded += 1
+                      # Create new rate (allow duplicates, user can manage them)
+                      var newRate = newExchangeRate(
+                        rate = rate,
+                        reverse_rate = 1.0 / rate,
+                        valid_date = validDate,
+                        rate_source = "ECB",
+                        from_currency_id = eurCurrency.id,
+                        to_currency_id = curr.id
+                      )
+                      save(newRate, db)
+                      ratesAdded += 1
 
-      resp Http200, jsonCors, $(%*{
-        "success": true,
-        "message": "ECB курсовете са обновени",
-        "ratesAdded": ratesAdded,
-        "date": ratesDate
-      })
-    except CatchableError as e:
-      resp Http500, jsonCors, $(%*{
-        "error": "Грешка при извличане на курсове от ЕЦБ",
-        "details": e.msg
-      })
-    finally:
-      releaseDbConn(db)
+        resp Http200, {"Content-Type": "application/json"}, $(%*{
+          "success": true,
+          "message": "ECB курсовете са обновени",
+          "ratesAdded": ratesAdded,
+          "date": ratesDate
+        })
+      except CatchableError as e:
+        resp Http500, {"Content-Type": "application/json"}, $(%*{
+          "error": "Грешка при извличане на курсове от ЕЦБ",
+          "details": e.msg
+        })
 
   # =====================
   # VAT RATE ROUTES
   # =====================
   get "/api/vat-rates":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
       var rates: seq[VatRate]
       if companyId > 0:
         rates = findWhere(VatRate, db, "company_id = $1", $companyId)
       else:
         rates = findAll(VatRate, db)
-      resp Http200, jsonCors, $toJsonArray(rates)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(rates)
 
   post "/api/vat-rates":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
+    withDb:
+      let body = parseJson(request.body)
       var vatRate = newVatRate(
         company_id = body["companyId"].getInt().int64,
         code = body["code"].getStr(),
@@ -792,30 +373,24 @@ router mainRouter:
       if body.hasKey("effectiveFrom"):
         vatRate.valid_from = some(parse(body["effectiveFrom"].getStr(), "yyyy-MM-dd"))
       save(vatRate, db)
-      resp Http201, jsonCors, $toJson(vatRate)
-    finally:
-      releaseDbConn(db)
+      resp Http201, {"Content-Type": "application/json"}, $toJson(vatRate)
 
   delete "/api/vat-rates/@id":
-    let id = parseInt(@"id")
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = parseInt(@"id")
       let vatRateOpt = find(VatRate, id, db)
       if vatRateOpt.isNone:
-        resp Http404, jsonCors, """{"error": "VAT rate not found"}"""
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "VAT rate not found"}"""
         return
       var vatRate = vatRateOpt.get()
       delete(vatRate, db)
-      resp Http200, jsonCors, """{"success": true}"""
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
 
   # =====================
   # USER ROUTES
   # =====================
   get "/api/users":
-    let db = getDbConn()
-    try:
+    withDb:
       var users = findAll(User, db)
       var usersJson = newJArray()
       for user in users:
@@ -828,32 +403,26 @@ router mainRouter:
           "isActive": user.is_active,
           "groupId": user.group_id
         })
-      resp Http200, jsonCors, $usersJson
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $usersJson
 
   post "/api/users":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
+    withDb:
+      let body = parseJson(request.body)
       let user = createUser(db,
         body["username"].getStr(),
         body["email"].getStr(),
         body["password"].getStr(),
         body.getOrDefault("groupId").getInt(0).int64
       )
-      resp Http201, jsonCors, $toJson(user)
-    finally:
-      releaseDbConn(db)
+      resp Http201, {"Content-Type": "application/json"}, $toJson(user)
 
   put "/api/users/@id":
-    let id = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = parseInt(@"id")
+      let body = parseJson(request.body)
       let userOpt = find(User, id, db)
       if userOpt.isNone:
-        resp Http404, jsonCors, """{"error": "User not found"}"""
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
         return
       var user = userOpt.get()
       if body.hasKey("username"):
@@ -869,68 +438,54 @@ router mainRouter:
       if body.hasKey("isActive"):
         user.is_active = body["isActive"].getBool()
       save(user, db)
-      resp Http200, jsonCors, $toJson(user)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(user)
 
   delete "/api/users/@id":
-    let id = parseInt(@"id")
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = parseInt(@"id")
       let userOpt = find(User, id, db)
       if userOpt.isNone:
-        resp Http404, jsonCors, """{"error": "User not found"}"""
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
         return
       var user = userOpt.get()
       delete(user, db)
-      resp Http200, jsonCors, """{"success": true}"""
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
 
   post "/api/users/@id/reset-password":
-    let id = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = parseInt(@"id")
+      let body = parseJson(request.body)
       let userOpt = find(User, id, db)
       if userOpt.isNone:
-        resp Http404, jsonCors, """{"error": "User not found"}"""
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
         return
       var user = userOpt.get()
       let newSalt = $epochTime()
       user.password = hashPassword(body["newPassword"].getStr(), newSalt)
       user.salt = newSalt
       save(user, db)
-      resp Http200, jsonCors, """{"success": true}"""
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
 
   # =====================
   # USER GROUP ROUTES
   # =====================
   get "/api/user-groups":
-    let db = getDbConn()
-    try:
+    withDb:
       var groups = findAll(UserGroup, db)
-      resp Http200, jsonCors, $toJsonArray(groups)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(groups)
 
   # =====================
   # FIXED ASSET CATEGORY ROUTES
   # =====================
   get "/api/fixed-asset-categories":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
       var categories: seq[FixedAssetCategory]
       if companyId > 0:
         categories = findWhere(FixedAssetCategory, db, "company_id = $1", $companyId)
       else:
         categories = findAll(FixedAssetCategory, db)
-      resp Http200, jsonCors, $toJsonArray(categories)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(categories)
 
   # =====================
   # VIES ROUTES
@@ -939,9 +494,9 @@ router mainRouter:
     let body = parseJson(request.body)
     let vatNumber = body["vatNumber"].getStr()
     if vatNumber.len < 3:
-      resp Http400, jsonCors, """{"error": "VAT number too short"}"""
+      resp Http400, {"Content-Type": "application/json"}, """{"error": "VAT number too short"}"""
     else:
-      resp Http200, jsonCors, """{"message": "VIES validation not implemented yet"}"""
+      resp Http200, {"Content-Type": "application/json"}, """{"message": "VIES validation not implemented yet"}"""
 
   # =====================
   # VAT RETURNS ROUTES
@@ -949,10 +504,10 @@ router mainRouter:
   get "/api/vat-returns":
     let companyId = request.params.getOrDefault("companyId", "0").parseInt
     if companyId == 0:
-      resp Http400, jsonCors, $(%*{"error": "Missing companyId"})
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Missing companyId"})
     else:
       # Placeholder - returns empty array
-      resp Http200, jsonCors, "[]"
+      resp Http200, {"Content-Type": "application/json"}, "[]"
 
   # =====================
   # SCANNER ROUTES
@@ -996,497 +551,459 @@ router mainRouter:
       "requiresManualReview": true,
       "manualReviewReason": "AI сканирането все още не е конфигурирано. Моля въведете Azure ключовете в настройките на компанията."
     }
-    resp Http200, jsonCors, $mockResult
+    resp Http200, {"Content-Type": "application/json"}, $mockResult
 
   get "/api/scanned-invoices":
-    let companyId = request.params.getOrDefault("companyId", "0")
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0")
       var invoices: seq[ScannedInvoice]
       if companyId != "0":
         invoices = findWhere(ScannedInvoice, db, "company_id = $1 ORDER BY created_at DESC", companyId)
       else:
         invoices = findAll(ScannedInvoice, db)
-      resp Http200, jsonCors, $toJsonArray(invoices)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(invoices)
 
   post "/api/scanned-invoices":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let recognized = body["recognized"]
-      var invoice = newScannedInvoice(
-        direction = recognized.getOrDefault("direction").getStr("UNKNOWN"),
-        status = "PENDING",
-        document_number = recognized.getOrDefault("invoiceId").getStr(""),
-        vendor_name = recognized.getOrDefault("vendorName").getStr(""),
-        vendor_vat_number = recognized.getOrDefault("vendorVatNumber").getStr(""),
-        vendor_address = recognized.getOrDefault("vendorAddress").getStr(""),
-        customer_name = recognized.getOrDefault("customerName").getStr(""),
-        customer_vat_number = recognized.getOrDefault("customerVatNumber").getStr(""),
-        customer_address = recognized.getOrDefault("customerAddress").getStr(""),
-        subtotal = recognized.getOrDefault("subtotal").getFloat(0.0),
-        total_tax = recognized.getOrDefault("totalTax").getFloat(0.0),
-        invoice_total = recognized.getOrDefault("invoiceTotal").getFloat(0.0),
-        validation_status = recognized.getOrDefault("validationStatus").getStr("PENDING"),
-        file_name = body.getOrDefault("fileName").getStr(""),
-        company_id = body["companyId"].getBiggestInt(),
-        created_by_id = 1
-      )
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        let recognized = body["recognized"]
+        var invoice = newScannedInvoice(
+          direction = recognized.getOrDefault("direction").getStr("UNKNOWN"),
+          status = "PENDING",
+          document_number = recognized.getOrDefault("invoiceId").getStr(""),
+          vendor_name = recognized.getOrDefault("vendorName").getStr(""),
+          vendor_vat_number = recognized.getOrDefault("vendorVatNumber").getStr(""),
+          vendor_address = recognized.getOrDefault("vendorAddress").getStr(""),
+          customer_name = recognized.getOrDefault("customerName").getStr(""),
+          customer_vat_number = recognized.getOrDefault("customerVatNumber").getStr(""),
+          customer_address = recognized.getOrDefault("customerAddress").getStr(""),
+          subtotal = recognized.getOrDefault("subtotal").getFloat(0.0),
+          total_tax = recognized.getOrDefault("totalTax").getFloat(0.0),
+          invoice_total = recognized.getOrDefault("invoiceTotal").getFloat(0.0),
+          validation_status = recognized.getOrDefault("validationStatus").getStr("PENDING"),
+          file_name = body.getOrDefault("fileName").getStr(""),
+          company_id = body["companyId"].getBiggestInt(),
+          created_by_id = 1
+        )
 
-      # Parse invoice date
-      let invoiceDateStr = recognized.getOrDefault("invoiceDate").getStr("")
-      if invoiceDateStr.len > 0:
-        try:
-          invoice.document_date = parse(invoiceDateStr.split("T")[0], "yyyy-MM-dd")
-        except:
-          invoice.document_date = now()
+        # Parse invoice date
+        let invoiceDateStr = recognized.getOrDefault("invoiceDate").getStr("")
+        if invoiceDateStr.len > 0:
+          try:
+            invoice.document_date = parse(invoiceDateStr.split("T")[0], "yyyy-MM-dd")
+          except:
+            invoice.document_date = now()
 
-      invoice.requires_manual_review = recognized.getOrDefault("requiresManualReview").getBool(false)
-      invoice.manual_review_reason = recognized.getOrDefault("manualReviewReason").getStr("")
+        invoice.requires_manual_review = recognized.getOrDefault("requiresManualReview").getBool(false)
+        invoice.manual_review_reason = recognized.getOrDefault("manualReviewReason").getStr("")
 
-      # Store suggested account IDs
-      invoice.counterparty_account_id = recognized.getOrDefault("counterpartyAccountId").getBiggestInt(0)
-      invoice.vat_account_id = recognized.getOrDefault("vatAccountId").getBiggestInt(0)
-      invoice.expense_revenue_account_id = recognized.getOrDefault("expenseRevenueAccountId").getBiggestInt(0)
+        # Store suggested account IDs
+        invoice.counterparty_account_id = recognized.getOrDefault("counterpartyAccountId").getBiggestInt(0)
+        invoice.vat_account_id = recognized.getOrDefault("vatAccountId").getBiggestInt(0)
+        invoice.expense_revenue_account_id = recognized.getOrDefault("expenseRevenueAccountId").getBiggestInt(0)
 
-      save(invoice, db)
-      resp Http201, jsonCors, $toJson(invoice)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        save(invoice, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(invoice)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   get "/api/scanned-invoices/@id":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = @"id".parseInt
       let invoiceOpt = find(ScannedInvoice, id, db)
       if invoiceOpt.isSome:
-        resp Http200, jsonCors, $toJson(invoiceOpt.get())
+        resp Http200, {"Content-Type": "application/json"}, $toJson(invoiceOpt.get())
       else:
-        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
-    finally:
-      releaseDbConn(db)
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фактурата не е намерена"})
 
   put "/api/scanned-invoices/@id":
-    let id = @"id".parseInt
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      var invoiceOpt = find(ScannedInvoice, id, db)
-      if invoiceOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
-        return
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let body = parseJson(request.body)
+        var invoiceOpt = find(ScannedInvoice, id, db)
+        if invoiceOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фактурата не е намерена"})
+          return
 
-      var invoice = invoiceOpt.get()
-      invoice.status = body.getOrDefault("status").getStr(invoice.status)
-      invoice.updated_at = now()
-      save(invoice, db)
-      resp Http200, jsonCors, $toJson(invoice)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        var invoice = invoiceOpt.get()
+        invoice.status = body.getOrDefault("status").getStr(invoice.status)
+        invoice.updated_at = now()
+        save(invoice, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(invoice)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   delete "/api/scanned-invoices/@id":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = @"id".parseInt
       var invoiceOpt = find(ScannedInvoice, id, db)
       if invoiceOpt.isSome:
         var invoice = invoiceOpt.get()
         delete(invoice, db)
-        resp Http200, jsonCors, $(%*{"success": true})
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
       else:
-        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
-    finally:
-      releaseDbConn(db)
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фактурата не е намерена"})
 
   post "/api/scanned-invoices/@id/process":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
-      var invoiceOpt = find(ScannedInvoice, id, db)
-      if invoiceOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
-        return
+    withDb:
+      try:
+        let id = @"id".parseInt
+        var invoiceOpt = find(ScannedInvoice, id, db)
+        if invoiceOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фактурата не е намерена"})
+          return
 
-      var invoice = invoiceOpt.get()
-      if invoice.status == "PROCESSED":
-        resp Http400, jsonCors, $(%*{"error": "Фактурата вече е обработена"})
-        return
+        var invoice = invoiceOpt.get()
+        if invoice.status == "PROCESSED":
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Фактурата вече е обработена"})
+          return
 
-      # Create journal entry from scanned invoice
-      var entry = newJournalEntry(
-        document_date = invoice.document_date,
-        accounting_date = invoice.document_date,
-        document_number = invoice.document_number,
-        description = "Сканирана фактура от " & (if invoice.direction == "PURCHASE": invoice.vendor_name else: invoice.customer_name),
-        total_amount = invoice.invoice_total,
-        total_vat_amount = invoice.total_tax,
-        document_type = "INVOICE",
-        company_id = invoice.company_id,
-        created_by_id = invoice.created_by_id
-      )
-      save(entry, db)
-
-      # Create entry lines based on suggested accounts
-      var lineOrder = 0
-
-      # Counterparty line (401 or 411)
-      if invoice.counterparty_account_id > 0:
-        var counterpartyLine = newEntryLine(
-          debit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.invoice_total,
-          credit_amount = if invoice.direction == "PURCHASE": invoice.invoice_total else: 0.0,
-          description = invoice.document_number,
-          line_order = lineOrder,
-          journal_entry_id = entry.id,
-          account_id = invoice.counterparty_account_id
+        # Create journal entry from scanned invoice
+        var entry = newJournalEntry(
+          document_date = invoice.document_date,
+          accounting_date = invoice.document_date,
+          document_number = invoice.document_number,
+          description = "Сканирана фактура от " & (if invoice.direction == "PURCHASE": invoice.vendor_name else: invoice.customer_name),
+          total_amount = invoice.invoice_total,
+          total_vat_amount = invoice.total_tax,
+          document_type = "INVOICE",
+          company_id = invoice.company_id,
+          created_by_id = invoice.created_by_id
         )
-        save(counterpartyLine, db)
-        inc lineOrder
+        save(entry, db)
 
-      # VAT line (4531 or 4532)
-      if invoice.vat_account_id > 0 and invoice.total_tax > 0:
-        var vatLine = newEntryLine(
-          debit_amount = if invoice.direction == "PURCHASE": invoice.total_tax else: 0.0,
-          credit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.total_tax,
-          description = "ДДС",
-          line_order = lineOrder,
-          journal_entry_id = entry.id,
-          account_id = invoice.vat_account_id
-        )
-        save(vatLine, db)
-        inc lineOrder
+        # Create entry lines based on suggested accounts
+        var lineOrder = 0
 
-      # Expense/Revenue line (6xx or 7xx)
-      if invoice.expense_revenue_account_id > 0:
-        var expRevLine = newEntryLine(
-          debit_amount = if invoice.direction == "PURCHASE": invoice.subtotal else: 0.0,
-          credit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.subtotal,
-          description = "Данъчна основа",
-          line_order = lineOrder,
-          journal_entry_id = entry.id,
-          account_id = invoice.expense_revenue_account_id
-        )
-        save(expRevLine, db)
+        # Counterparty line (401 or 411)
+        if invoice.counterparty_account_id > 0:
+          var counterpartyLine = newEntryLine(
+            debit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.invoice_total,
+            credit_amount = if invoice.direction == "PURCHASE": invoice.invoice_total else: 0.0,
+            description = invoice.document_number,
+            line_order = lineOrder,
+            journal_entry_id = entry.id,
+            account_id = invoice.counterparty_account_id
+          )
+          save(counterpartyLine, db)
+          inc lineOrder
 
-      # Update invoice status
-      invoice.status = "PROCESSED"
-      invoice.journal_entry_id = entry.id.int64
-      invoice.updated_at = now()
-      save(invoice, db)
+        # VAT line (4531 or 4532)
+        if invoice.vat_account_id > 0 and invoice.total_tax > 0:
+          var vatLine = newEntryLine(
+            debit_amount = if invoice.direction == "PURCHASE": invoice.total_tax else: 0.0,
+            credit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.total_tax,
+            description = "ДДС",
+            line_order = lineOrder,
+            journal_entry_id = entry.id,
+            account_id = invoice.vat_account_id
+          )
+          save(vatLine, db)
+          inc lineOrder
 
-      resp Http200, jsonCors, $(%*{"id": invoice.id, "status": "PROCESSED", "journalEntryId": entry.id})
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        # Expense/Revenue line (6xx or 7xx)
+        if invoice.expense_revenue_account_id > 0:
+          var expRevLine = newEntryLine(
+            debit_amount = if invoice.direction == "PURCHASE": invoice.subtotal else: 0.0,
+            credit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.subtotal,
+            description = "Данъчна основа",
+            line_order = lineOrder,
+            journal_entry_id = entry.id,
+            account_id = invoice.expense_revenue_account_id
+          )
+          save(expRevLine, db)
+
+        # Update invoice status
+        invoice.status = "PROCESSED"
+        invoice.journal_entry_id = entry.id.int64
+        invoice.updated_at = now()
+        save(invoice, db)
+
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"id": invoice.id, "status": "PROCESSED", "journalEntryId": entry.id})
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   # =====================
   # JOURNAL ROUTES
   # =====================
   get "/api/journal-entries":
-    let companyId = request.params.getOrDefault("companyId", "0")
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0")
       var entries: seq[JournalEntry]
       if companyId != "0":
         entries = findWhere(JournalEntry, db, "company_id = $1 ORDER BY document_date DESC", $(parseInt(companyId)))
       else:
         entries = findAll(JournalEntry, db)
-      resp Http200, jsonCors, $toJsonArray(entries)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(entries)
 
   post "/api/journal-entries":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      # Get next entry number
-      var maxNum: int64 = 0
-      let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(entry_number), 0) FROM "JournalEntry" WHERE company_id = $1""", body["companyId"].getBiggestInt())
-      if rows.len > 0 and ($rows[0][0]).len > 0:
-        maxNum = parseInt($rows[0][0])
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        # Get next entry number
+        var maxNum: int64 = 0
+        let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(entry_number), 0) FROM "JournalEntry" WHERE company_id = $1""", body["companyId"].getBiggestInt())
+        if rows.len > 0 and ($rows[0][0]).len > 0:
+          maxNum = parseInt($rows[0][0])
 
-      var entry = newJournalEntry(
-        entry_number = int(maxNum + 1),
-        document_number = body.getOrDefault("documentNumber").getStr(""),
-        description = body.getOrDefault("description").getStr(""),
-        total_amount = body.getOrDefault("totalAmount").getFloat(0.0),
-        company_id = body["companyId"].getBiggestInt(),
-        created_by_id = body.getOrDefault("createdById").getBiggestInt(1)
-      )
-      if body.hasKey("documentDate"):
-        entry.document_date = parse(body["documentDate"].getStr(), "yyyy-MM-dd")
-      if body.hasKey("accountingDate"):
-        entry.accounting_date = parse(body["accountingDate"].getStr(), "yyyy-MM-dd")
-      if body.hasKey("documentType"):
-        entry.document_type = body["documentType"].getStr()
-      if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
-        entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
+        var entry = newJournalEntry(
+          entry_number = int(maxNum + 1),
+          document_number = body.getOrDefault("documentNumber").getStr(""),
+          description = body.getOrDefault("description").getStr(""),
+          total_amount = body.getOrDefault("totalAmount").getFloat(0.0),
+          company_id = body["companyId"].getBiggestInt(),
+          created_by_id = body.getOrDefault("createdById").getBiggestInt(1)
+        )
+        if body.hasKey("documentDate"):
+          entry.document_date = parse(body["documentDate"].getStr(), "yyyy-MM-dd")
+        if body.hasKey("accountingDate"):
+          entry.accounting_date = parse(body["accountingDate"].getStr(), "yyyy-MM-dd")
+        if body.hasKey("documentType"):
+          entry.document_type = body["documentType"].getStr()
+        if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
+          entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
 
-      save(entry, db)
+        save(entry, db)
 
-      # Insert entry lines if provided
-      if body.hasKey("lines"):
-        var lineOrder = 1
-        for lineJson in body["lines"]:
-          var line = newEntryLine(
-            journal_entry_id = entry.id,
-            account_id = lineJson["accountId"].getBiggestInt(),
-            debit_amount = lineJson.getOrDefault("debitAmount").getFloat(0.0),
-            credit_amount = lineJson.getOrDefault("creditAmount").getFloat(0.0),
-            description = lineJson.getOrDefault("description").getStr(""),
-            line_order = lineOrder
-          )
-          if lineJson.hasKey("counterpartId") and lineJson["counterpartId"].kind != JNull:
-            line.counterpart_id = some(lineJson["counterpartId"].getBiggestInt())
-          save(line, db)
-          inc lineOrder
+        # Insert entry lines if provided
+        if body.hasKey("lines"):
+          var lineOrder = 1
+          for lineJson in body["lines"]:
+            var line = newEntryLine(
+              journal_entry_id = entry.id,
+              account_id = lineJson["accountId"].getBiggestInt(),
+              debit_amount = lineJson.getOrDefault("debitAmount").getFloat(0.0),
+              credit_amount = lineJson.getOrDefault("creditAmount").getFloat(0.0),
+              description = lineJson.getOrDefault("description").getStr(""),
+              line_order = lineOrder
+            )
+            if lineJson.hasKey("counterpartId") and lineJson["counterpartId"].kind != JNull:
+              line.counterpart_id = some(lineJson["counterpartId"].getBiggestInt())
+            save(line, db)
+            inc lineOrder
 
-      resp Http201, jsonCors, $toJson(entry)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(entry)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   get "/api/journal-entries/@id":
-    let entryId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let entryOpt = find(JournalEntry, entryId, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
-        return
-      var entry = entryOpt.get()
+    withDb:
+      try:
+        let entryId = parseInt(@"id")
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          return
+        var entry = entryOpt.get()
 
-      # Get entry lines
-      var lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $entryId)
+        # Get entry lines
+        var lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $entryId)
 
-      var entryJson = toJson(entry)
-      entryJson["lines"] = toJsonArray(lines)
-      resp Http200, jsonCors, $entryJson
-    except:
-      resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
-    finally:
-      releaseDbConn(db)
+        var entryJson = toJson(entry)
+        entryJson["lines"] = toJsonArray(lines)
+        resp Http200, {"Content-Type": "application/json"}, $entryJson
+      except:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
 
   put "/api/journal-entries/@id":
-    let entryId = parseInt(@"id")
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let entryOpt = find(JournalEntry, entryId, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
-        return
-      var entry = entryOpt.get()
+    withDb:
+      try:
+        let entryId = parseInt(@"id")
+        let body = parseJson(request.body)
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          return
+        var entry = entryOpt.get()
 
-      if entry.is_posted:
-        resp Http400, jsonCors, $(%*{"error": "Не може да редактирате осчетоводен запис"})
+        if entry.is_posted:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да редактирате осчетоводен запис"})
 
-      if body.hasKey("documentNumber"): entry.document_number = body["documentNumber"].getStr()
-      if body.hasKey("description"): entry.description = body["description"].getStr()
-      if body.hasKey("totalAmount"): entry.total_amount = body["totalAmount"].getFloat()
-      if body.hasKey("documentDate"):
-        entry.document_date = parse(body["documentDate"].getStr(), "yyyy-MM-dd")
-      if body.hasKey("counterpartId"):
-        if body["counterpartId"].kind == JNull:
-          entry.counterpart_id = none(int64)
-        else:
-          entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
-      entry.updated_at = now()
-      save(entry, db)
-      resp Http200, jsonCors, $toJson(entry)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        if body.hasKey("documentNumber"): entry.document_number = body["documentNumber"].getStr()
+        if body.hasKey("description"): entry.description = body["description"].getStr()
+        if body.hasKey("totalAmount"): entry.total_amount = body["totalAmount"].getFloat()
+        if body.hasKey("documentDate"):
+          entry.document_date = parse(body["documentDate"].getStr(), "yyyy-MM-dd")
+        if body.hasKey("counterpartId"):
+          if body["counterpartId"].kind == JNull:
+            entry.counterpart_id = none(int64)
+          else:
+            entry.counterpart_id = some(body["counterpartId"].getBiggestInt())
+        entry.updated_at = now()
+        save(entry, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   delete "/api/journal-entries/@id":
-    let entryId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let entryOpt = find(JournalEntry, entryId, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
-        return
-      var entry = entryOpt.get()
+    withDb:
+      try:
+        let entryId = parseInt(@"id")
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          return
+        var entry = entryOpt.get()
 
-      if entry.is_posted:
-        resp Http400, jsonCors, $(%*{"error": "Не може да изтриете осчетоводен запис"})
+        if entry.is_posted:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтриете осчетоводен запис"})
 
-      # Delete entry lines first
-      db.exec(sql"""DELETE FROM "EntryLine" WHERE journal_entry_id = $1""", entryId)
-      delete(entry, db)
-      resp Http200, jsonCors, $(%*{"success": true})
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        # Delete entry lines first
+        db.exec(sql"""DELETE FROM "EntryLine" WHERE journal_entry_id = $1""", entryId)
+        delete(entry, db)
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   post "/api/journal-entries/@id/post":
-    let entryId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let entryOpt = find(JournalEntry, entryId, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
-        return
-      var entry = entryOpt.get()
+    withDb:
+      try:
+        let entryId = parseInt(@"id")
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          return
+        var entry = entryOpt.get()
 
-      if entry.is_posted:
-        resp Http400, jsonCors, $(%*{"error": "Записът вече е осчетоводен"})
+        if entry.is_posted:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Записът вече е осчетоводен"})
 
-      # Validate debit = credit
-      let rows = db.getAllRows(sql"""
-        SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0)
-        FROM "EntryLine" WHERE journal_entry_id = $1
-      """, entryId)
-      if rows.len > 0:
-        let debitSum = parseFloat($rows[0][0])
-        let creditSum = parseFloat($rows[0][1])
-        if abs(debitSum - creditSum) > 0.001:
-          resp Http400, jsonCors, $(%*{
-            "error": "Дебит и кредит не са равни",
-            "debit": debitSum,
-            "credit": creditSum
-          })
+        # Validate debit = credit
+        let rows = db.getAllRows(sql"""
+          SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0)
+          FROM "EntryLine" WHERE journal_entry_id = $1
+        """, entryId)
+        if rows.len > 0:
+          let debitSum = parseFloat($rows[0][0])
+          let creditSum = parseFloat($rows[0][1])
+          if abs(debitSum - creditSum) > 0.001:
+            resp Http400, {"Content-Type": "application/json"}, $(%*{
+              "error": "Дебит и кредит не са равни",
+              "debit": debitSum,
+              "credit": creditSum
+            })
 
-      entry.is_posted = true
-      entry.posted_at = some(now())
-      entry.updated_at = now()
-      save(entry, db)
-      resp Http200, jsonCors, $toJson(entry)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        entry.is_posted = true
+        entry.posted_at = some(now())
+        entry.updated_at = now()
+        save(entry, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   post "/api/journal-entries/@id/unpost":
-    let entryId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let entryOpt = find(JournalEntry, entryId, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Записът не е намерен"})
-        return
-      var entry = entryOpt.get()
+    withDb:
+      try:
+        let entryId = parseInt(@"id")
+        let entryOpt = find(JournalEntry, entryId, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е намерен"})
+          return
+        var entry = entryOpt.get()
 
-      if not entry.is_posted:
-        resp Http400, jsonCors, $(%*{"error": "Записът не е осчетоводен"})
+        if not entry.is_posted:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Записът не е осчетоводен"})
 
-      entry.is_posted = false
-      entry.posted_at = none(DateTime)
-      entry.updated_at = now()
-      save(entry, db)
-      resp Http200, jsonCors, $toJson(entry)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        entry.is_posted = false
+        entry.posted_at = none(DateTime)
+        entry.updated_at = now()
+        save(entry, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(entry)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   # =====================
   # ENTRY LINE ROUTES
   # =====================
   get "/api/entry-lines":
-    let journalEntryId = request.params.getOrDefault("journalEntryId", "0")
-    let db = getDbConn()
-    try:
+    withDb:
+      let journalEntryId = request.params.getOrDefault("journalEntryId", "0")
       var lines: seq[EntryLine]
       if journalEntryId != "0":
         lines = findWhere(EntryLine, db, "journal_entry_id = $1 ORDER BY line_order", $(parseInt(journalEntryId)))
       else:
         lines = findAll(EntryLine, db)
-      resp Http200, jsonCors, $toJsonArray(lines)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(lines)
 
   post "/api/entry-lines":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      # Check if journal entry is posted
-      let entryOpt = find(JournalEntry, body["journalEntryId"].getBiggestInt().int, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Journal entry not found"})
-        return
-      var entry = entryOpt.get()
-      if entry.is_posted:
-        resp Http400, jsonCors, $(%*{"error": "Не може да добавяте редове към осчетоводен запис"})
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        # Check if journal entry is posted
+        let entryOpt = find(JournalEntry, body["journalEntryId"].getBiggestInt().int, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Journal entry not found"})
+          return
+        var entry = entryOpt.get()
+        if entry.is_posted:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да добавяте редове към осчетоводен запис"})
 
-      # Get next line order
-      let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(line_order), 0) FROM "EntryLine" WHERE journal_entry_id = $1""", body["journalEntryId"].getBiggestInt())
-      var maxOrder = 0
-      if rows.len > 0 and ($rows[0][0]).len > 0:
-        maxOrder = parseInt($rows[0][0])
+        # Get next line order
+        let rows = db.getAllRows(sql"""SELECT COALESCE(MAX(line_order), 0) FROM "EntryLine" WHERE journal_entry_id = $1""", body["journalEntryId"].getBiggestInt())
+        var maxOrder = 0
+        if rows.len > 0 and ($rows[0][0]).len > 0:
+          maxOrder = parseInt($rows[0][0])
 
-      var line = newEntryLine(
-        journal_entry_id = body["journalEntryId"].getBiggestInt(),
-        account_id = body["accountId"].getBiggestInt(),
-        debit_amount = body.getOrDefault("debitAmount").getFloat(0.0),
-        credit_amount = body.getOrDefault("creditAmount").getFloat(0.0),
-        description = body.getOrDefault("description").getStr(""),
-        line_order = maxOrder + 1
-      )
-      if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
-        line.counterpart_id = some(body["counterpartId"].getBiggestInt())
-      if body.hasKey("currencyCode"):
-        line.currency_code = body["currencyCode"].getStr()
-      if body.hasKey("currencyAmount"):
-        line.currency_amount = body["currencyAmount"].getFloat()
-      if body.hasKey("exchangeRate"):
-        line.exchange_rate = body["exchangeRate"].getFloat()
+        var line = newEntryLine(
+          journal_entry_id = body["journalEntryId"].getBiggestInt(),
+          account_id = body["accountId"].getBiggestInt(),
+          debit_amount = body.getOrDefault("debitAmount").getFloat(0.0),
+          credit_amount = body.getOrDefault("creditAmount").getFloat(0.0),
+          description = body.getOrDefault("description").getStr(""),
+          line_order = maxOrder + 1
+        )
+        if body.hasKey("counterpartId") and body["counterpartId"].kind != JNull:
+          line.counterpart_id = some(body["counterpartId"].getBiggestInt())
+        if body.hasKey("currencyCode"):
+          line.currency_code = body["currencyCode"].getStr()
+        if body.hasKey("currencyAmount"):
+          line.currency_amount = body["currencyAmount"].getFloat()
+        if body.hasKey("exchangeRate"):
+          line.exchange_rate = body["exchangeRate"].getFloat()
 
-      save(line, db)
-      resp Http201, jsonCors, $toJson(line)
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        save(line, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(line)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   delete "/api/entry-lines/@id":
-    let lineId = parseInt(@"id")
-    let db = getDbConn()
-    try:
-      let lineOpt = find(EntryLine, lineId, db)
-      if lineOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Entry line not found"})
-        return
-      var line = lineOpt.get()
+    withDb:
+      try:
+        let lineId = parseInt(@"id")
+        let lineOpt = find(EntryLine, lineId, db)
+        if lineOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Entry line not found"})
+          return
+        var line = lineOpt.get()
 
-      # Check if journal entry is posted
-      let entryOpt = find(JournalEntry, line.journal_entry_id.int, db)
-      if entryOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Journal entry not found"})
-        return
-      var entry = entryOpt.get()
-      if entry.is_posted:
-        resp Http400, jsonCors, $(%*{"error": "Не може да изтривате редове от осчетоводен запис"})
+        # Check if journal entry is posted
+        let entryOpt = find(JournalEntry, line.journal_entry_id.int, db)
+        if entryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Journal entry not found"})
+          return
+        var entry = entryOpt.get()
+        if entry.is_posted:
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтривате редове от осчетоводен запис"})
 
-      delete(line, db)
-      resp Http200, jsonCors, $(%*{"success": true})
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
+        delete(line, db)
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   # =====================
   # REPORTS ROUTES
   # =====================
   get "/api/reports/turnover-sheet":
-    let companyId = request.params.getOrDefault("companyId", "0")
-    let fromDate = request.params.getOrDefault("fromDate", "")
-    let toDate = request.params.getOrDefault("toDate", "")
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0")
+      let fromDate = request.params.getOrDefault("fromDate", "")
+      let toDate = request.params.getOrDefault("toDate", "")
 
-    if companyId == "0":
-      resp Http400, jsonCors, $(%*{"error": "companyId е задължителен"})
+      if companyId == "0":
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId е задължителен"})
 
-    let db = getDbConn()
-    try:
       # Query for turnover sheet (Оборотна ведомост)
       let query = sql"""
         SELECT
@@ -1525,30 +1042,27 @@ router mainRouter:
           "closingCredit": closingCredit
         })
 
-      resp Http200, jsonCors, $(%*{
+      resp Http200, {"Content-Type": "application/json"}, $(%*{
         "companyId": parseInt(companyId),
         "fromDate": fromDate,
         "toDate": toDate,
         "accounts": accounts
       })
-    finally:
-      releaseDbConn(db)
 
   get "/api/reports/general-ledger":
-    let companyId = request.params.getOrDefault("companyId", "0")
-    let accountId = request.params.getOrDefault("accountId", "0")
-    let fromDate = request.params.getOrDefault("fromDate", "")
-    let toDate = request.params.getOrDefault("toDate", "")
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0")
+      let accountId = request.params.getOrDefault("accountId", "0")
+      let fromDate = request.params.getOrDefault("fromDate", "")
+      let toDate = request.params.getOrDefault("toDate", "")
 
-    if companyId == "0" or accountId == "0":
-      resp Http400, jsonCors, $(%*{"error": "companyId и accountId са задължителни"})
+      if companyId == "0" or accountId == "0":
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId и accountId са задължителни"})
 
-    let db = getDbConn()
-    try:
       # Get account info
       let accountOpt = find(Account, parseInt(accountId), db)
       if accountOpt.isNone:
-        resp Http404, jsonCors, $(%*{"error": "Account not found"})
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Account not found"})
         return
       var account = accountOpt.get()
 
@@ -1607,7 +1121,7 @@ router mainRouter:
           "balance": runningDebit - runningCredit
         })
 
-      resp Http200, jsonCors, $(%*{
+      resp Http200, {"Content-Type": "application/json"}, $(%*{
         "account": {
           "id": account.id,
           "code": account.code,
@@ -1623,118 +1137,105 @@ router mainRouter:
         "closingCredit": runningCredit,
         "closingBalance": runningDebit - runningCredit
       })
-    except:
-      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
-    finally:
-      releaseDbConn(db)
 
   # =====================
   # BANK PROFILE ROUTES
   # =====================
   get "/api/banks":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
       var banks: seq[BankProfile]
       if companyId > 0:
         banks = findWhere(BankProfile, db, "company_id = $1", $companyId)
       else:
         banks = findAll(BankProfile, db)
-      resp Http200, jsonCors, $toJsonArray(banks)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(banks)
 
   get "/api/banks/@id":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = @"id".parseInt
       let bankOpt = find(BankProfile, id, db)
       if bankOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "Bank profile not found"}"""
         return
       var bank = bankOpt.get()
-      resp Http200, jsonCors, $toJson(bank)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(bank)
 
   post "/api/banks":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      var bank = newBankProfile(
-        name = body["name"].getStr,
-        iban = body.getOrDefault("iban").getStr(""),
-        account_id = body["accountId"].getInt.int64,
-        buffer_account_id = body["bufferAccountId"].getInt.int64,
-        company_id = body["companyId"].getInt.int64,
-        currency_code = body.getOrDefault("currencyCode").getStr("BGN"),
-        connection_type = body.getOrDefault("connectionType").getStr("MANUAL"),
-        import_format = body.getOrDefault("importFormat").getStr("MT940"),
-        saltedge_provider_code = body.getOrDefault("saltEdgeProviderCode").getStr(""),
-        saltedge_provider_name = body.getOrDefault("saltEdgeProviderName").getStr(""),
-        is_active = body.getOrDefault("isActive").getBool(true)
-      )
-      save(bank, db)
-      resp Http201, jsonCors, $toJson(bank)
-    except CatchableError as e:
-      resp Http400, jsonCors, $(%*{"error": e.msg})
-    finally:
-      releaseDbConn(db)
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        var bank = newBankProfile(
+          name = body["name"].getStr,
+          iban = body.getOrDefault("iban").getStr(""),
+          account_id = body["accountId"].getInt.int64,
+          buffer_account_id = body["bufferAccountId"].getInt.int64,
+          company_id = body["companyId"].getInt.int64,
+          currency_code = body.getOrDefault("currencyCode").getStr("BGN"),
+          connection_type = body.getOrDefault("connectionType").getStr("MANUAL"),
+          import_format = body.getOrDefault("importFormat").getStr("MT940"),
+          saltedge_provider_code = body.getOrDefault("saltEdgeProviderCode").getStr(""),
+          saltedge_provider_name = body.getOrDefault("saltEdgeProviderName").getStr(""),
+          is_active = body.getOrDefault("isActive").getBool(true)
+        )
+        save(bank, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(bank)
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   put "/api/banks/@id":
-    let id = @"id".parseInt
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let bankOpt = find(BankProfile, id, db)
-      if bankOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
-        return
-      var bank = bankOpt.get()
-      if body.hasKey("name"):
-        bank.name = body["name"].getStr
-      if body.hasKey("iban"):
-        bank.iban = body["iban"].getStr
-      if body.hasKey("accountId"):
-        bank.account_id = body["accountId"].getInt.int64
-      if body.hasKey("bufferAccountId"):
-        bank.buffer_account_id = body["bufferAccountId"].getInt.int64
-      if body.hasKey("currencyCode"):
-        bank.currency_code = body["currencyCode"].getStr
-      if body.hasKey("connectionType"):
-        bank.connection_type = body["connectionType"].getStr
-      if body.hasKey("importFormat"):
-        bank.import_format = body["importFormat"].getStr
-      if body.hasKey("isActive"):
-        bank.is_active = body["isActive"].getBool
-      bank.updated_at = now()
-      save(bank, db)
-      resp Http200, jsonCors, $toJson(bank)
-    finally:
-      releaseDbConn(db)
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let body = parseJson(request.body)
+        let bankOpt = find(BankProfile, id, db)
+        if bankOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Bank profile not found"}"""
+          return
+        var bank = bankOpt.get()
+        if body.hasKey("name"):
+          bank.name = body["name"].getStr
+        if body.hasKey("iban"):
+          bank.iban = body["iban"].getStr
+        if body.hasKey("accountId"):
+          bank.account_id = body["accountId"].getInt.int64
+        if body.hasKey("bufferAccountId"):
+          bank.buffer_account_id = body["bufferAccountId"].getInt.int64
+        if body.hasKey("currencyCode"):
+          bank.currency_code = body["currencyCode"].getStr
+        if body.hasKey("connectionType"):
+          bank.connection_type = body["connectionType"].getStr
+        if body.hasKey("importFormat"):
+          bank.import_format = body["importFormat"].getStr
+        if body.hasKey("isActive"):
+          bank.is_active = body["isActive"].getBool
+        bank.updated_at = now()
+        save(bank, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(bank)
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   delete "/api/banks/@id":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
-      let bankOpt = find(BankProfile, id, db)
-      if bankOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Bank profile not found"}"""
-        return
-      var bank = bankOpt.get()
-      delete(bank, db)
-      resp Http200, jsonCors, """{"success": true}"""
-    finally:
-      releaseDbConn(db)
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let bankOpt = find(BankProfile, id, db)
+        if bankOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Bank profile not found"}"""
+          return
+        var bank = bankOpt.get()
+        delete(bank, db)
+        resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   # =====================
   # FIXED ASSET ROUTES
   # =====================
   get "/api/fixed-assets":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let status = request.params.getOrDefault("status", "")
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
+      let status = request.params.getOrDefault("status", "")
       var assets: seq[FixedAsset]
       if companyId > 0:
         if status != "":
@@ -1743,239 +1244,227 @@ router mainRouter:
           assets = findWhere(FixedAsset, db, "company_id = $1", $companyId)
       else:
         assets = findAll(FixedAsset, db)
-      resp Http200, jsonCors, $toJsonArray(assets)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(assets)
 
   get "/api/fixed-assets/@id":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let id = @"id".parseInt
       let assetOpt = find(FixedAsset, id, db)
       if assetOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
         return
       var asset = assetOpt.get()
-      resp Http200, jsonCors, $toJson(asset)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(asset)
 
   post "/api/fixed-assets":
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let categoryOpt = find(FixedAssetCategory, body["categoryId"].getInt(), db)
-      if categoryOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Fixed asset category not found"}"""
-        return
-      var category = categoryOpt.get()
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        let categoryOpt = find(FixedAssetCategory, body["categoryId"].getInt(), db)
+        if categoryOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset category not found"}"""
+          return
+        var category = categoryOpt.get()
 
-      let acquisitionCost = body["acquisitionCost"].getFloat
+        let acquisitionCost = body["acquisitionCost"].getFloat
 
-      var asset = newFixedAsset(
-        name = body["name"].getStr,
-        inventory_number = body["inventoryNumber"].getStr,
-        description = body.getOrDefault("description").getStr(""),
-        category_id = category.id,
-        company_id = body["companyId"].getInt.int64,
-        acquisition_date = parse(body["acquisitionDate"].getStr, "yyyy-MM-dd"),
-        acquisition_cost = acquisitionCost,
-        residual_value = body.getOrDefault("residualValue").getFloat(0.0),
-        document_number = body.getOrDefault("documentNumber").getStr(""),
-        status = "ACTIVE",
-        depreciation_method = body.getOrDefault("depreciationMethod").getStr("LINEAR"),
-        accounting_depreciation_rate = if category.id > 0: category.max_depreciation_rate else: 15.0,
-        tax_depreciation_rate = if category.id > 0: category.max_depreciation_rate else: 15.0
-      )
+        var asset = newFixedAsset(
+          name = body["name"].getStr,
+          inventory_number = body["inventoryNumber"].getStr,
+          description = body.getOrDefault("description").getStr(""),
+          category_id = category.id,
+          company_id = body["companyId"].getInt.int64,
+          acquisition_date = parse(body["acquisitionDate"].getStr, "yyyy-MM-dd"),
+          acquisition_cost = acquisitionCost,
+          residual_value = body.getOrDefault("residualValue").getFloat(0.0),
+          document_number = body.getOrDefault("documentNumber").getStr(""),
+          status = "ACTIVE",
+          depreciation_method = body.getOrDefault("depreciationMethod").getStr("LINEAR"),
+          accounting_depreciation_rate = if category.id > 0: category.max_depreciation_rate else: 15.0,
+          tax_depreciation_rate = if category.id > 0: category.max_depreciation_rate else: 15.0
+        )
 
-      if body.hasKey("documentDate") and body["documentDate"].getStr != "":
-        asset.document_date = some(parse(body["documentDate"].getStr, "yyyy-MM-dd"))
-      if body.hasKey("putIntoServiceDate") and body["putIntoServiceDate"].getStr != "":
-        asset.put_into_service_date = some(parse(body["putIntoServiceDate"].getStr, "yyyy-MM-dd"))
+        if body.hasKey("documentDate") and body["documentDate"].getStr != "":
+          asset.document_date = some(parse(body["documentDate"].getStr, "yyyy-MM-dd"))
+        if body.hasKey("putIntoServiceDate") and body["putIntoServiceDate"].getStr != "":
+          asset.put_into_service_date = some(parse(body["putIntoServiceDate"].getStr, "yyyy-MM-dd"))
 
-      asset.accounting_book_value = acquisitionCost
-      asset.tax_book_value = acquisitionCost
+        asset.accounting_book_value = acquisitionCost
+        asset.tax_book_value = acquisitionCost
 
-      save(asset, db)
-      resp Http201, jsonCors, $toJson(asset)
-    except CatchableError as e:
-      resp Http400, jsonCors, $(%*{"error": e.msg})
-    finally:
-      releaseDbConn(db)
+        save(asset, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(asset)
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   put "/api/fixed-assets/@id":
-    let id = @"id".parseInt
-    let body = parseJson(request.body)
-    let db = getDbConn()
-    try:
-      let assetOpt = find(FixedAsset, id, db)
-      if assetOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
-        return
-      var asset = assetOpt.get()
-      if body.hasKey("name"):
-        asset.name = body["name"].getStr
-      if body.hasKey("description"):
-        asset.description = body["description"].getStr
-      if body.hasKey("status"):
-        asset.status = body["status"].getStr
-      if body.hasKey("accountingDepreciationRate"):
-        asset.accounting_depreciation_rate = body["accountingDepreciationRate"].getFloat
-      if body.hasKey("taxDepreciationRate"):
-        asset.tax_depreciation_rate = body["taxDepreciationRate"].getFloat
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let body = parseJson(request.body)
+        let assetOpt = find(FixedAsset, id, db)
+        if assetOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
+          return
+        var asset = assetOpt.get()
+        if body.hasKey("name"):
+          asset.name = body["name"].getStr
+        if body.hasKey("description"):
+          asset.description = body["description"].getStr
+        if body.hasKey("status"):
+          asset.status = body["status"].getStr
+        if body.hasKey("accountingDepreciationRate"):
+          asset.accounting_depreciation_rate = body["accountingDepreciationRate"].getFloat
+        if body.hasKey("taxDepreciationRate"):
+          asset.tax_depreciation_rate = body["taxDepreciationRate"].getFloat
 
-      asset.updated_at = now()
-      save(asset, db)
-      resp Http200, jsonCors, $toJson(asset)
-    finally:
-      releaseDbConn(db)
+        asset.updated_at = now()
+        save(asset, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(asset)
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   delete "/api/fixed-assets/@id":
-    let id = @"id".parseInt
-    let db = getDbConn()
-    try:
-      let assetOpt = find(FixedAsset, id, db)
-      if assetOpt.isNone:
-        resp Http404, jsonCors, """{"error": "Fixed asset not found"}"""
-        return
-      var asset = assetOpt.get()
-      delete(asset, db)
-      resp Http200, jsonCors, """{"success": true}"""
-    finally:
-      releaseDbConn(db)
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let assetOpt = find(FixedAsset, id, db)
+        if assetOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Fixed asset not found"}"""
+          return
+        var asset = assetOpt.get()
+        delete(asset, db)
+        resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   post "/api/fixed-assets/calculate-depreciation":
-    let body = parseJson(request.body)
-    let companyId = body["companyId"].getInt
-    let year = body["year"].getInt
-    let month = body["month"].getInt
-    let db = getDbConn()
-    try:
-      var assets = findWhere(FixedAsset, db, "company_id = $1 AND status = $2", $companyId, "ACTIVE")
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        let companyId = body["companyId"].getInt
+        let year = body["year"].getInt
+        let month = body["month"].getInt
+        var assets = findWhere(FixedAsset, db, "company_id = $1 AND status = $2", $companyId, "ACTIVE")
 
-      var calculated: seq[JsonNode] = @[]
-      var totalAccountingAmount = 0.0
-      var totalTaxAmount = 0.0
-      var errors: seq[JsonNode] = @[]
+        var calculated: seq[JsonNode] = @[]
+        var totalAccountingAmount = 0.0
+        var totalTaxAmount = 0.0
+        var errors: seq[JsonNode] = @[]
 
-      for asset in assets:
-        let existing = findWhere(DepreciationJournal, db, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
-                  $asset.id, $year, $month)
-        if existing.len > 0:
-          continue
+        for asset in assets:
+          let existing = findWhere(DepreciationJournal, db, "fixed_asset_id = $1 AND period_year = $2 AND period_month = $3",
+                    $asset.id, $year, $month)
+          if existing.len > 0:
+            continue
 
-        let monthlyAccountingRate = asset.accounting_depreciation_rate / 12.0 / 100.0
-        let monthlyTaxRate = asset.tax_depreciation_rate / 12.0 / 100.0
+          let monthlyAccountingRate = asset.accounting_depreciation_rate / 12.0 / 100.0
+          let monthlyTaxRate = asset.tax_depreciation_rate / 12.0 / 100.0
 
-        let accountingDepreciation = min(
-          asset.accounting_book_value * monthlyAccountingRate,
-          asset.accounting_book_value - asset.residual_value
-        )
-        let taxDepreciation = min(
-          asset.tax_book_value * monthlyTaxRate,
-          asset.tax_book_value
-        )
+          let accountingDepreciation = min(
+            asset.accounting_book_value * monthlyAccountingRate,
+            asset.accounting_book_value - asset.residual_value
+          )
+          let taxDepreciation = min(
+            asset.tax_book_value * monthlyTaxRate,
+            asset.tax_book_value
+          )
 
-        if accountingDepreciation <= 0 and taxDepreciation <= 0:
-          continue
+          if accountingDepreciation <= 0 and taxDepreciation <= 0:
+            continue
 
-        var journal = newDepreciationJournal(
-          fixed_asset_id = asset.id,
-          company_id = companyId.int64,
-          period_year = year,
-          period_month = month,
-          accounting_depreciation_amount = accountingDepreciation,
-          accounting_book_value_before = asset.accounting_book_value,
-          accounting_book_value_after = asset.accounting_book_value - accountingDepreciation,
-          tax_depreciation_amount = taxDepreciation,
-          tax_book_value_before = asset.tax_book_value,
-          tax_book_value_after = asset.tax_book_value - taxDepreciation
-        )
-        save(journal, db)
+          var journal = newDepreciationJournal(
+            fixed_asset_id = asset.id,
+            company_id = companyId.int64,
+            period_year = year,
+            period_month = month,
+            accounting_depreciation_amount = accountingDepreciation,
+            accounting_book_value_before = asset.accounting_book_value,
+            accounting_book_value_after = asset.accounting_book_value - accountingDepreciation,
+            tax_depreciation_amount = taxDepreciation,
+            tax_book_value_before = asset.tax_book_value,
+            tax_book_value_after = asset.tax_book_value - taxDepreciation
+          )
+          save(journal, db)
 
-        var assetToUpdate = asset
-        assetToUpdate.accounting_accumulated_depreciation += accountingDepreciation
-        assetToUpdate.accounting_book_value -= accountingDepreciation
-        assetToUpdate.tax_accumulated_depreciation += taxDepreciation
-        assetToUpdate.tax_book_value -= taxDepreciation
-        assetToUpdate.last_depreciation_date = some(now())
-        assetToUpdate.updated_at = now()
+          var assetToUpdate = asset
+          assetToUpdate.accounting_accumulated_depreciation += accountingDepreciation
+          assetToUpdate.accounting_book_value -= accountingDepreciation
+          assetToUpdate.tax_accumulated_depreciation += taxDepreciation
+          assetToUpdate.tax_book_value -= taxDepreciation
+          assetToUpdate.last_depreciation_date = some(now())
+          assetToUpdate.updated_at = now()
 
-        if assetToUpdate.accounting_book_value <= assetToUpdate.residual_value:
-          assetToUpdate.status = "DEPRECIATED"
+          if assetToUpdate.accounting_book_value <= assetToUpdate.residual_value:
+            assetToUpdate.status = "DEPRECIATED"
 
-        save(assetToUpdate, db)
+          save(assetToUpdate, db)
 
-        totalAccountingAmount += accountingDepreciation
-        totalTaxAmount += taxDepreciation
+          totalAccountingAmount += accountingDepreciation
+          totalTaxAmount += taxDepreciation
 
-        calculated.add(%*{
-          "fixedAssetId": asset.id,
-          "fixedAssetName": asset.name,
-          "accountingDepreciationAmount": accountingDepreciation,
-          "taxDepreciationAmount": taxDepreciation
+          calculated.add(%*{
+            "fixedAssetId": asset.id,
+            "fixedAssetName": asset.name,
+            "accountingDepreciationAmount": accountingDepreciation,
+            "taxDepreciationAmount": taxDepreciation
+          })
+
+        resp Http200, {"Content-Type": "application/json"}, $(%*{
+          "calculated": calculated,
+          "errors": errors,
+          "totalAccountingAmount": totalAccountingAmount,
+          "totalTaxAmount": totalTaxAmount
         })
-
-      resp Http200, jsonCors, $(%*{
-        "calculated": calculated,
-        "errors": errors,
-        "totalAccountingAmount": totalAccountingAmount,
-        "totalTaxAmount": totalTaxAmount
-      })
-    except CatchableError as e:
-      resp Http400, jsonCors, $(%*{"error": e.msg})
-    finally:
-      releaseDbConn(db)
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   post "/api/fixed-assets/post-depreciation":
-    let body = parseJson(request.body)
-    let companyId = body["companyId"].getInt
-    let year = body["year"].getInt
-    let month = body["month"].getInt
-    let db = getDbConn()
-    try:
-      var entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
-                $companyId, $year, $month, "false")
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        let companyId = body["companyId"].getInt
+        let year = body["year"].getInt
+        let month = body["month"].getInt
+        var entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3 AND is_posted = $4",
+                  $companyId, $year, $month, "false")
 
-      if entries.len == 0:
-        resp Http400, jsonCors, """{"error": "No unposted depreciation entries found"}"""
+        if entries.len == 0:
+          resp Http400, {"Content-Type": "application/json"}, """{"error": "No unposted depreciation entries found"}"""
 
-      var totalAmount = 0.0
-      for entry in entries:
-        totalAmount += entry.accounting_depreciation_amount
+        var totalAmount = 0.0
+        for entry in entries:
+          totalAmount += entry.accounting_depreciation_amount
 
-      var journalEntry = newJournalEntry(
-        company_id = companyId.int64,
-        description = "Месечна амортизация " & $month & "/" & $year,
-        document_number = "АМОР-" & $year & "-" & $month,
-        total_amount = totalAmount
-      )
-      save(journalEntry, db)
+        var journalEntry = newJournalEntry(
+          company_id = companyId.int64,
+          description = "Месечна амортизация " & $month & "/" & $year,
+          document_number = "АМОР-" & $year & "-" & $month,
+          total_amount = totalAmount
+        )
+        save(journalEntry, db)
 
-      for entry in entries:
-        var e = entry
-        e.is_posted = true
-        e.journal_entry_id = some(journalEntry.id.int64)
-        e.posted_at = some(now())
-        e.updated_at = now()
-        save(e, db)
+        for entry in entries:
+          var e = entry
+          e.is_posted = true
+          e.journal_entry_id = some(journalEntry.id.int64)
+          e.posted_at = some(now())
+          e.updated_at = now()
+          save(e, db)
 
-      resp Http200, jsonCors, $(%*{
-        "journalEntryId": journalEntry.id,
-        "totalAmount": totalAmount,
-        "assetsCount": entries.len
-      })
-    except CatchableError as e:
-      resp Http400, jsonCors, $(%*{"error": e.msg})
-    finally:
-      releaseDbConn(db)
+        resp Http200, {"Content-Type": "application/json"}, $(%*{
+          "journalEntryId": journalEntry.id,
+          "totalAmount": totalAmount,
+          "assetsCount": entries.len
+        })
+      except CatchableError as e:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": e.msg})
 
   get "/api/depreciation-journal":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let year = request.params.getOrDefault("year", "0").parseInt
-    let month = request.params.getOrDefault("month", "")
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
+      let year = request.params.getOrDefault("year", "0").parseInt
+      let month = request.params.getOrDefault("month", "")
       var entries: seq[DepreciationJournal]
       if month != "":
         entries = findWhere(DepreciationJournal, db, "company_id = $1 AND period_year = $2 AND period_month = $3",
@@ -2013,14 +1502,11 @@ router mainRouter:
           entryJson["postedAt"] = newJNull()
         journalResult.add(entryJson)
 
-      resp Http200, jsonCors, $(%journalResult)
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $(%journalResult)
 
   get "/api/calculated-periods":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    let db = getDbConn()
-    try:
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
       let rows = db.getAllRows(sql"""
         SELECT period_year, period_month,
                bool_and(is_posted) as all_posted,
@@ -2049,11 +1535,7 @@ router mainRouter:
           "assetsCount": parseInt($row[5])
         })
 
-      resp Http200, jsonCors, $(%periodsResult)
-    except CatchableError:
-      resp Http200, jsonCors, "[]"
-    finally:
-      releaseDbConn(db)
+      resp Http200, {"Content-Type": "application/json"}, $(%periodsResult)
 
   # =====================
   # GRAPHQL ENDPOINT
@@ -2061,7 +1543,7 @@ router mainRouter:
   post "/graphql":
     let ctx = getGraphqlCtx()
     if ctx.isNil:
-      resp Http500, jsonCors, $(%*{"error": "GraphQL not initialized"})
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "GraphQL not initialized"})
 
     let body = parseJson(request.body)
     let query = body.getOrDefault("query").getStr("")
@@ -2069,7 +1551,7 @@ router mainRouter:
     let operationName = body.getOrDefault("operationName").getStr("")
 
     if query.len == 0:
-      resp Http400, jsonCors, $(%*{"error": "Query is required"})
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Query is required"})
 
     # Clear previous query state
     ctx.purgeQueries(includeVariables = true, includeStored = false)
@@ -2081,7 +1563,7 @@ router mainRouter:
         var errMsgs: seq[string]
         for e in varsRes.error:
           errMsgs.add($e)
-        resp Http400, jsonCors, $(%*{"errors": errMsgs})
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
 
     # Parse and validate query
     let queryRes = ctx.parseQuery(query)
@@ -2089,7 +1571,7 @@ router mainRouter:
       var errMsgs: seq[string]
       for e in queryRes.error:
         errMsgs.add($e)
-      resp Http400, jsonCors, $(%*{"errors": errMsgs})
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
 
     # Execute
     let jsonResp = JsonRespStream.new()
@@ -2098,10 +1580,10 @@ router mainRouter:
       var errMsgs: seq[string]
       for e in execRes.error:
         errMsgs.add($e)
-      resp Http400, jsonCors, $(%*{"errors": errMsgs})
+      resp Http400, {"Content-Type": "application/json"}, $(%*{"errors": errMsgs})
 
     let response = jsonResp.getString()
-    resp Http200, jsonCors, response
+    resp Http200, {"Content-Type": "application/json"}, response
 
   get "/graphql":
     # GraphiQL interface

@@ -1,16 +1,20 @@
 ## Database configuration and connection pool for norm ORM
 ## Thread-safe connection pool for multi-threaded servers
-import std/[locks, sequtils, atomics]
+import std/[locks, sequtils, atomics, os, strutils]
 import lowdb/postgres
 
 export postgres
 
-const
-  DbHost* = "localhost"
-  DbUser* = "postgres"
-  DbPassword* = "pas+123"
-  DbName* = "jesterac"
-  PoolSize* = 10
+let
+  DbHost* = getEnv("DB_HOST", "localhost")
+  DbUser* = getEnv("DB_USER", "postgres")
+  DbPassword* = getEnv("DB_PASSWORD", "")
+  DbName* = getEnv("DB_NAME", "jesterac")
+  PoolSize* = parseInt(getEnv("DB_POOL_SIZE", "10"))
+
+if DbPassword.len == 0:
+  echo "FATAL: DB_PASSWORD environment variable must be set."
+  quit(1)
 
 type
   ConnectionPool = object

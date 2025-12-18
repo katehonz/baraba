@@ -2,40 +2,54 @@ import std/[json, strutils, options, times]
 import jester
 import orm/orm
 
-import ../models/[company, currency]
+import ../models/[company, currency, account]
 import ../db/config
 import ../utils/json_utils
 
 proc companyRoutes*(): auto =
   router companyRouter:
-    # GET /api/companies - Logic from baraba.nim
     get "/api/companies":
-      let db = getDbConn()
-      try:
+      withDb:
         let companies = findAll(Company, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(companies)
-      finally:
-        releaseDbConn(db)
 
-    # GET /api/companies/@id - Logic from baraba.nim
     get "/api/companies/@id":
-      let companyId = parseInt(@"id")
-      let db = getDbConn()
-      try:
+      withDb:
+        let companyId = parseInt(@"id")
         let companyOpt = find(Company, companyId, db)
-        if companyOpt.isSome:
-          let company = companyOpt.get()
-          resp Http200, {"Content-Type": "application/json"}, $toJson(company)
-        else:
-          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
-      finally:
-        releaseDbConn(db)
+        if companyOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Company not found"}"""
+          return
+        
+        let company = companyOpt.get()
+        var companyJson = toJson(company)
+        let fields = [
+          ("defaultCashAccountId", "defaultCashAccount"),
+          ("defaultCustomersAccountId", "defaultCustomersAccount"),
+          ("defaultSuppliersAccountId", "defaultSuppliersAccount"),
+          ("defaultSalesRevenueAccountId", "defaultSalesRevenueAccount"),
+          ("defaultVatPurchaseAccountId", "defaultVatPurchaseAccount"),
+          ("defaultVatSalesAccountId", "defaultVatSalesAccount"),
+          ("defaultCardPaymentPurchaseAccountId", "defaultCardPaymentPurchaseAccount"),
+          ("defaultCardPaymentSalesAccountId", "defaultCardPaymentSalesAccount")
+        ]
 
-    # POST /api/companies - Logic from baraba.nim
+        for (field, jsonField) in fields:
+          let accountIdOpt = company.getAccountId(field)
+          if accountIdOpt.isSome:
+            let accountOpt2 = find(Account, accountIdOpt.get.int, db)
+            if accountOpt2.isSome:
+              companyJson[jsonField] = toJson(accountOpt2.get())
+            else:
+              companyJson[jsonField] = %*{}
+          else:
+            companyJson[jsonField] = %*{}
+
+        resp Http200, {"Content-Type": "application/json"}, $companyJson
+
     post "/api/companies":
-      let body = parseJson(request.body)
-      let db = getDbConn()
-      try:
+      withDb:
+        let body = parseJson(request.body)
         var baseCurrencyId: int64 = 0
         let currencies = findWhere(Currency, db, "code = $1", "BGN")
         if currencies.len > 0:
@@ -50,48 +64,65 @@ proc companyRoutes*(): auto =
         )
         save(company, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(company)
-      except:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
-      finally:
-        releaseDbConn(db)
 
-    # PUT from original company_routes.nim, adapted for pool
     put "/api/companies/@id":
-      let companyId = parseInt(@"id")
-      let body = parseJson(request.body)
-      let db = getDbConn()
-      try:
-        var companyOpt = find(Company, companyId, db)
-        if companyOpt.isSome:
-          var company = companyOpt.get()
-          if body.hasKey("name"): company.name = body["name"].getStr()
-          if body.hasKey("vat_number"): company.vat_number = body["vat_number"].getStr()
-          if body.hasKey("address"): company.address = body["address"].getStr()
-          if body.hasKey("city"): company.city = body["city"].getStr()
-          # Note: original file had more fields, but the model in baraba.nim is simpler.
-          # Sticking to the simpler model for now.
-          company.updated_at = now()
+      withDb:
+        let companyId = parseInt(@"id")
+        let body = parseJson(request.body)
+        let companyOpt = find(Company, companyId, db)
+        if companyOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Фирмата не е намерена"}"""
+          return
+        var company = companyOpt.get()
+        if body.hasKey("name"): company.name = body["name"].getStr()
+        if body.hasKey("vatNumber"): company.vat_number = body["vatNumber"].getStr()
+        if body.hasKey("address"): company.address = body["address"].getStr()
+        if body.hasKey("city"): company.city = body["city"].getStr()
+        company.updated_at = now()
+        save(company, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(company)
 
-          save(company, db)
-          resp Http200, {"Content-Type": "application/json"}, $toJson(company)
-        else:
-          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
-      finally:
-        releaseDbConn(db)
+    put "/api/companies/@id/default-accounts":
+      withDb:
+        let companyId = parseInt(@"id")
+        let body = parseJson(request.body)
+        let companyOpt = find(Company, companyId, db)
+        if companyOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Фирмата не е намерена"}"""
+          return
+        var company = companyOpt.get()
 
-    # DELETE from original company_routes.nim, adapted for pool
+        let fields = [
+          "defaultCashAccountId",
+          "defaultCustomersAccountId",
+          "defaultSuppliersAccountId",
+          "defaultSalesRevenueAccountId",
+          "defaultVatPurchaseAccountId",
+          "defaultVatSalesAccountId",
+          "defaultCardPaymentPurchaseAccountId",
+          "defaultCardPaymentSalesAccountId"
+        ]
+
+        for field in fields:
+          if body.hasKey(field):
+            if body[field].kind == JNull or body[field].getInt() == 0:
+              company.setAccountId(field, none(int64))
+            else:
+              company.setAccountId(field, some(body[field].getInt().int64))
+        
+        company.updated_at = now()
+        save(company, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+
     delete "/api/companies/@id":
-      let companyId = parseInt(@"id")
-      let db = getDbConn()
-      try:
-        deleteById(Company, companyId, db)
-        resp Http200, {"Content-Type": "application/json"}, $(%*{
-          "success": true,
-          "message": "Фирмата е изтрита"
-        })
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
-      finally:
-        releaseDbConn(db)
+      withDb:
+        let companyId = parseInt(@"id")
+        let companyOpt = find(Company, companyId, db)
+        if companyOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, """{"error": "Фирмата не е намерена"}"""
+          return
+        var company = companyOpt.get()
+        delete(company, db)
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
 
   return companyRouter

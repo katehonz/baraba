@@ -8,57 +8,40 @@ import ../utils/json_utils
 
 proc accountRoutes*(): auto =
   router accountRouter:
-    # Logic from baraba.nim, adapted for pool
     get "/api/accounts":
-      let companyId = request.params.getOrDefault("companyId", "0")
-      let db = getDbConn()
-      try:
+      withDb:
+        let companyId = request.params.getOrDefault("companyId", "0")
         var accounts: seq[Account]
         if companyId != "0":
-          accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", companyId)
+          accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $(parseInt(companyId)))
         else:
           accounts = findAll(Account, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
-      finally:
-        releaseDbConn(db)
 
     get "/api/accounts/company/@companyId":
-      let companyId = @"companyId"
-      let db = getDbConn()
-      try:
-        let accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", companyId)
+      withDb:
+        let companyId = parseInt(@"companyId")
+        var accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $companyId)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
-      finally:
-        releaseDbConn(db)
-    
-    # This is a new route from the original account_routes.nim
+
     get "/api/accounts/analytical/@companyId":
-      let companyId = @"companyId"
-      let db = getDbConn()
-      try:
+      withDb:
+        let companyId = @"companyId"
         let accounts = findWhere(Account, db, "company_id = $1 AND is_analytical = true ORDER BY code", companyId)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
-      finally:
-        releaseDbConn(db)
 
     get "/api/accounts/@id":
-      let accountId = parseInt(@"id")
-      let db = getDbConn()
-      try:
-        let accountOpt = find(Account, accountId, db)
-        if accountOpt.isSome:
-          let account = accountOpt.get()
-          resp Http200, {"Content-Type": "application/json"}, $toJson(account)
-        else:
-          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
-      finally:
-        releaseDbConn(db)
+      withDb:
+        let accountOpt = find(Account, parseInt(@"id"), db)
+        if accountOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Account not found"})
+          return
+        var account = accountOpt.get()
+        resp Http200, {"Content-Type": "application/json"}, $toJson(account)
 
-    # Logic from baraba.nim, adapted for pool
     post "/api/accounts":
-      let body = parseJson(request.body)
-      let db = getDbConn()
-      try:
+      withDb:
+        let body = parseJson(request.body)
         var parentId = none(int64)
         if body.hasKey("parentId") and body["parentId"].kind != JNull:
           parentId = some(body["parentId"].getBiggestInt())
@@ -71,17 +54,11 @@ proc accountRoutes*(): auto =
         )
         save(account, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(account)
-      except:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
-      finally:
-        releaseDbConn(db)
 
-    # Logic from original account_routes.nim, adapted for pool
     put "/api/accounts/@id":
-      let accountId = parseInt(@"id")
-      let body = parseJson(request.body)
-      let db = getDbConn()
-      try:
+      withDb:
+        let accountId = parseInt(@"id")
+        let body = parseJson(request.body)
         var accountOpt = find(Account, accountId, db)
         if accountOpt.isSome:
           var account = accountOpt.get()
@@ -93,19 +70,11 @@ proc accountRoutes*(): auto =
           resp Http200, {"Content-Type": "application/json"}, $toJson(account)
         else:
           resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
-      finally:
-        releaseDbConn(db)
 
-    # Logic from original account_routes.nim, adapted for pool
     delete "/api/accounts/@id":
-      let accountId = parseInt(@"id")
-      let db = getDbConn()
-      try:
+      withDb:
+        let accountId = parseInt(@"id")
         deleteById(Account, accountId, db)
         resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true, "message": "Сметката е изтрита"})
-      except:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
-      finally:
-        releaseDbConn(db)
 
   return accountRouter

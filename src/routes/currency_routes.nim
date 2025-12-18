@@ -9,17 +9,13 @@ import ../utils/json_utils
 proc currencyRoutes*(): auto =
   router currencyRouter:
     get "/api/currencies":
-      let db = getDbConn()
-      try:
+      withDb:
         let currencies = findAll(Currency, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(currencies)
-      finally:
-        releaseDbConn(db)
 
     post "/api/currencies":
-      let body = parseJson(request.body)
-      let db = getDbConn()
-      try:
+      withDb:
+        let body = parseJson(request.body)
         var currency = newCurrency(
           code = body["code"].getStr(),
           name = body["name"].getStr(),
@@ -31,14 +27,11 @@ proc currencyRoutes*(): auto =
         )
         save(currency, db)
         resp Http201, {"Content-Type": "application/json"}, $toJson(currency)
-      finally:
-        releaseDbConn(db)
 
     put "/api/currencies/@id":
-      let id = parseInt(@"id")
-      let body = parseJson(request.body)
-      let db = getDbConn()
-      try:
+      withDb:
+        let id = parseInt(@"id")
+        let body = parseJson(request.body)
         var currencyOpt = find(Currency, id, db)
         if currencyOpt.isSome:
           var currency = currencyOpt.get()
@@ -52,7 +45,5 @@ proc currencyRoutes*(): auto =
           resp Http200, {"Content-Type": "application/json"}, $toJson(currency)
         else:
           resp Http404, {"Content-Type": "application/json"}, """{"error": "Currency not found"}"""
-      finally:
-        releaseDbConn(db)
 
   return currencyRouter

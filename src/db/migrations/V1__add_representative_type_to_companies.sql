@@ -1,0 +1,1 @@
+ALTER TABLE "Company" ADD COLUMN representative_type VARCHAR(20) NOT NULL DEFAULT 'MANAGER';
