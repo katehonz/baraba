@@ -331,7 +331,7 @@ export default function ScannedInvoicesPage() {
                         {getStatusBadge(invoice.status)}
                         {invoice.requiresManualReview && (
                           <Tooltip label={invoice.manualReviewReason}>
-                            <Badge colorScheme="orange" fontSize="xs">Review</Badge>
+                            <Badge colorScheme="orange" fontSize="xs">{t('scanner.review')}</Badge>
                           </Tooltip>
                         )}
                       </VStack>
