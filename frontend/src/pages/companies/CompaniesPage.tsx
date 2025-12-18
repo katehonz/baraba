@@ -23,7 +23,10 @@ import {
   Divider,
   useColorModeValue,
   useDisclosure,
+  IconButton,
+  Tooltip,
 } from '@chakra-ui/react';
+import { EditIcon, DeleteIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { companiesApi } from '../../api/companies';
 import { useCompany } from '../../contexts/CompanyContext';
@@ -61,6 +64,8 @@ export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState<CompanyFormData>(initialFormData);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const { currentCompany, setCurrentCompany } = useCompany();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { t } = useTranslation();
@@ -87,13 +92,93 @@ export default function CompaniesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('=== SUBMIT DEBUG ===');
+    console.log('Is editing:', isEditing);
+    console.log('Editing company ID:', editingCompany?.id);
+    console.log('Current form data:', formData);
+    
+    // Convert camelCase to snake_case for backend
+    const backendData = {
+      name: formData.name,
+      eik: formData.eik,
+      vat_number: formData.vatNumber,
+      address: formData.address,
+      city: formData.city,
+      manager_name: formData.managerName,
+      manager_egn: formData.managerEgn,
+      authorized_person: formData.authorizedPerson,
+      authorized_person_egn: formData.authorizedPersonEgn,
+      nap_office: formData.napOffice,
+      representative_type: formData.representativeType,
+    };
+    console.log('Backend data to send:', backendData); // Debug log
+    
     try {
-      await companiesApi.create(formData);
+      if (isEditing && editingCompany) {
+        console.log('API CALL - Updating company with ID:', editingCompany.id);
+        const result = await companiesApi.update(editingCompany.id, backendData);
+        console.log('API RESPONSE - Update result:', result);
+        setIsEditing(false);
+        setEditingCompany(null);
+      } else {
+        console.log('API CALL - Creating new company');
+        const result = await companiesApi.create(backendData);
+        console.log('API RESPONSE - Create result:', result);
+      }
       onClose();
       setFormData(initialFormData);
       loadCompanies();
     } catch (error) {
-      console.error('Error creating company:', error);
+      console.error('=== API ERROR ===');
+      console.error('Error saving company:', error);
+      console.error('Error details:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+    }
+  };
+
+  const handleEdit = (company: Company) => {
+    console.log('=== EDIT DEBUG ===');
+    console.log('Full company object:', company);
+    console.log('Company manager fields:', {
+      manager_name: company.manager_name,
+      managerName: company.managerName,
+      'company manager_name': company['manager_name'],
+      'company managerName': company['managerName']
+    });
+    console.log('Company EGN fields:', {
+      manager_egn: company.manager_egn,
+      managerEgn: company.managerEgn
+    });
+    
+    const formDataToSet = {
+      name: company.name,
+      eik: company.eik,
+      vatNumber: company.vat_number || company.vatNumber || '',
+      address: company.address || '',
+      city: company.city || '',
+      managerName: company.manager_name || company.managerName || '',
+      managerEgn: company.manager_egn || company.managerEgn || '',
+      authorizedPerson: company.authorized_person || company.authorizedPerson || '',
+      authorizedPersonEgn: company.authorized_person_egn || company.authorizedPersonEgn || '',
+      napOffice: company.nap_office || company.napOffice || '',
+      representativeType: company.representative_type || company.representativeType || 'MANAGER',
+    };
+    
+    console.log('Form data to set:', formDataToSet);
+    setFormData(formDataToSet);
+    setIsEditing(true);
+    setEditingCompany(company);
+    onOpen();
+  };
+
+  const handleDelete = async (company: Company) => {
+    if (window.confirm(t('companies.confirm_delete'))) {
+      try {
+        await companiesApi.delete(company.id);
+        loadCompanies();
+      } catch (error) {
+        console.error('Error deleting company:', error);
+      }
     }
   };
 
@@ -113,14 +198,19 @@ export default function CompaniesPage() {
     <VStack spacing={6} align="stretch">
       <HStack justify="space-between">
         <Heading size="lg">{t('companies.title')}</Heading>
-        <Button colorScheme="brand" onClick={onOpen}>{t('companies.create')}</Button>
+        <Button colorScheme="brand" onClick={() => {
+          setIsEditing(false);
+          setEditingCompany(null);
+          setFormData(initialFormData);
+          onOpen();
+        }}>{t('companies.create')}</Button>
       </HStack>
 
       <Modal isOpen={isOpen} onClose={onClose} size="xl">
         <ModalOverlay />
         <ModalContent>
           <form onSubmit={handleSubmit}>
-            <ModalHeader>{t('companies.create')}</ModalHeader>
+            <ModalHeader>{isEditing ? t('companies.edit') : t('companies.create')}</ModalHeader>
             <ModalBody>
               <VStack spacing={4} align="stretch">
                 {/* Basic Company Info */}
@@ -235,7 +325,7 @@ export default function CompaniesPage() {
             </ModalBody>
             <ModalFooter>
               <Button variant="ghost" mr={3} onClick={onClose}>{t('common.cancel')}</Button>
-              <Button colorScheme="brand" type="submit">{t('common.create')}</Button>
+              <Button colorScheme="brand" type="submit">{isEditing ? t('common.update') : t('common.create')}</Button>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -260,9 +350,50 @@ export default function CompaniesPage() {
             >
               <HStack justify="space-between" align="start" mb={2}>
                 <Heading size="md">{company.name}</Heading>
-                {currentCompany?.id === company.id && (
-                  <Badge colorScheme="blue">{t('companies.selected')}</Badge>
-                )}
+                <HStack>
+                  {currentCompany?.id === company.id && (
+                    <Badge colorScheme="blue" fontSize="10px">{t('companies.selected')}</Badge>
+                  )}
+                  <Tooltip label={t('common.edit')} placement="top" hasArrow>
+                    <IconButton
+                      aria-label={t('common.edit')}
+                      icon={<EditIcon />}
+                      size="xs"
+                      colorScheme="blue"
+                      variant="solid"
+                      onClick={() => handleEdit(company)}
+                      mr={1}
+                      transition="all 0.2s"
+                      _hover={{
+                        transform: 'scale(1.1)',
+                        bg: 'blue.600'
+                      }}
+                      _active={{
+                        transform: 'scale(0.95)',
+                        bg: 'blue.700'
+                      }}
+                    />
+                  </Tooltip>
+                  <Tooltip label={t('common.delete')} placement="top" hasArrow>
+                    <IconButton
+                      aria-label={t('common.delete')}
+                      icon={<DeleteIcon />}
+                      size="xs"
+                      colorScheme="red"
+                      variant="solid"
+                      onClick={() => handleDelete(company)}
+                      transition="all 0.2s"
+                      _hover={{
+                        transform: 'scale(1.1)',
+                        bg: 'red.600'
+                      }}
+                      _active={{
+                        transform: 'scale(0.95)',
+                        bg: 'red.700'
+                      }}
+                    />
+                  </Tooltip>
+                </HStack>
               </HStack>
               <Text color="gray.500" fontSize="sm">{t('companies.eik_prefix')}{company.eik}</Text>
               {company.vatNumber && <Text color="gray.500" fontSize="sm">{t('companies.vat_prefix')}{company.vatNumber}</Text>}

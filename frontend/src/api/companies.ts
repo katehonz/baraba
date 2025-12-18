@@ -17,7 +17,7 @@ export const companiesApi = {
     return data;
   },
 
-  update: async (id: number, input: Partial<CreateCompanyInput>): Promise<Company> => {
+  update: async (id: number, input: Record<string, any>): Promise<Company> => {
     const { data } = await api.put<Company>(`/api/companies/${id}`, input);
     return data;
   },

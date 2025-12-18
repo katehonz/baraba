@@ -94,7 +94,7 @@ proc companyRoutes*(): auto =
 
         let fields = [
           "defaultCashAccountId",
-          "defaultCustomersAccountId",
+          "defaultCustomersAccountId", 
           "defaultSuppliersAccountId",
           "defaultSalesRevenueAccountId",
           "defaultVatPurchaseAccountId",
@@ -102,6 +102,21 @@ proc companyRoutes*(): auto =
           "defaultCardPaymentPurchaseAccountId",
           "defaultCardPaymentSalesAccountId"
         ]
+        
+        # Handle company fields that are sent from frontend
+        if body.hasKey("name"): company.name = body["name"].getStr()
+        if body.hasKey("eik"): company.eik = body["eik"].getStr()
+        if body.hasKey("vat_number"): company.vat_number = body["vat_number"].getStr()
+        if body.hasKey("address"): company.address = body["address"].getStr()
+        if body.hasKey("city"): company.city = body["city"].getStr()
+        if body.hasKey("manager_name"): company.manager_name = body["manager_name"].getStr()
+        if body.hasKey("manager_egn"): company.manager_egn = body["manager_egn"].getStr()
+        if body.hasKey("authorized_person"): company.authorized_person = body["authorized_person"].getStr()
+        if body.hasKey("authorized_person_egn"): company.authorized_person_egn = body["authorized_person_egn"].getStr()
+        if body.hasKey("nap_office"): company.nap_office = body["nap_office"].getStr()
+        if body.hasKey("representative_type"): 
+          let repTypeStr = body["representative_type"].getStr()
+          company.representative_type = repTypeStr
 
         for field in fields:
           if body.hasKey(field):

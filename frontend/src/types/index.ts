@@ -33,19 +33,30 @@ export interface Company {
   id: number;
   name: string;
   eik: string;
-  vatNumber: string;
-  address: string;
-  city: string;
-  country: string;
-  phone: string;
-  email: string;
-  contactPerson: string;
-  managerName: string;
-  managerEgn: string;
-  authorizedPerson: string;
-  authorizedPersonEgn: string;
-  napOffice: string;
-  representativeType: RepresentativeType;
+  // Backend sends snake_case, frontend uses camelCase
+  vat_number?: string;
+  vatNumber?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  contact_person?: string;
+  // Backend snake_case fields
+  manager_name?: string;
+  manager_egn?: string;
+  authorized_person?: string;
+  authorized_person_egn?: string;
+  nap_office?: string;
+  representative_type?: RepresentativeType;
+  // Frontend camelCase fields
+  managerName?: string;
+  managerEgn?: string;
+  authorizedPerson?: string;
+  authorizedPersonEgn?: string;
+  napOffice?: string;
+  representativeType?: RepresentativeType;
   isActive: boolean;
   baseCurrencyId: number;
   createdAt: string;
