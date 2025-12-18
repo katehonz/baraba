@@ -18,7 +18,7 @@ proc parseQueryParams(queryString: string): Table[string, string] =
     elif parts.len == 1:
       result[decodeUrl(parts[0])] = ""
 
-import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log]
+import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log, scanned_invoice]
 import services/auth
 import db/config
 import utils/json_utils
@@ -111,6 +111,7 @@ router mainRouter:
   options "/api/system-settings/smtp": resp Http200, corsHeaders, ""
   options "/api/system-settings/smtp/test": resp Http200, corsHeaders, ""
   options "/api/companies/@id/salt-edge": resp Http200, corsHeaders, ""
+  options "/api/scan-invoice": resp Http200, corsHeaders, ""
   options "/api/scanned-invoices": resp Http200, corsHeaders, ""
   options "/api/scanned-invoices/@id": resp Http200, corsHeaders, ""
   options "/api/scanned-invoices/@id/process": resp Http200, corsHeaders, ""
@@ -956,28 +957,233 @@ router mainRouter:
   # =====================
   # SCANNER ROUTES
   # =====================
+
+  # Endpoint for AI invoice scanning with Azure Document Intelligence
+  post "/api/scan-invoice":
+    # This endpoint handles multipart form data with PDF file
+    # For now, returns mock data - actual Azure integration requires:
+    # 1. Company's Azure Form Recognizer Endpoint
+    # 2. Company's Azure Form Recognizer Key
+    # TODO: Implement actual Azure Document Intelligence call
+
+    # Parse companyId from form data
+    let companyId = request.formData.getOrDefault("companyId").body
+    let invoiceType = request.formData.getOrDefault("invoiceType").body
+
+    # Mock response for testing
+    let isPurchase = invoiceType == "purchase"
+    let mockResult = %*{
+      "vendorName": if isPurchase: "Доставчик ЕООД" else: "",
+      "vendorVatNumber": if isPurchase: "BG123456789" else: "",
+      "vendorAddress": if isPurchase: "ул. Примерна 1, София" else: "",
+      "customerName": if not isPurchase: "Клиент ООД" else: "",
+      "customerVatNumber": if not isPurchase: "BG987654321" else: "",
+      "customerAddress": if not isPurchase: "ул. Клиентска 2, Пловдив" else: "",
+      "invoiceId": "1000000001",
+      "invoiceDate": format(now(), "yyyy-MM-dd"),
+      "dueDate": format(now() + initDuration(days=30), "yyyy-MM-dd"),
+      "subtotal": 1000.00,
+      "totalTax": 200.00,
+      "invoiceTotal": 1200.00,
+      "direction": if isPurchase: "PURCHASE" else: "SALE",
+      "validationStatus": "PENDING",
+      "viesValidationMessage": "",
+      "suggestedAccounts": {
+        "counterpartyAccount": nil,
+        "vatAccount": nil,
+        "expenseOrRevenueAccount": nil
+      },
+      "requiresManualReview": true,
+      "manualReviewReason": "AI сканирането все още не е конфигурирано. Моля въведете Azure ключовете в настройките на компанията."
+    }
+    resp Http200, jsonCors, $mockResult
+
   get "/api/scanned-invoices":
     let companyId = request.params.getOrDefault("companyId", "0")
-    resp Http200, jsonCors, "[]"
+    let db = getDbConn()
+    try:
+      var invoices: seq[ScannedInvoice]
+      if companyId != "0":
+        invoices = findWhere(ScannedInvoice, db, "company_id = $1 ORDER BY created_at DESC", companyId)
+      else:
+        invoices = findAll(ScannedInvoice, db)
+      resp Http200, jsonCors, $toJsonArray(invoices)
+    finally:
+      releaseDbConn(db)
 
   post "/api/scanned-invoices":
-    resp Http201, jsonCors, $(%*{"id": 1, "fileName": "invoice.pdf", "status": "UPLOADED"})
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      let recognized = body["recognized"]
+      var invoice = newScannedInvoice(
+        direction = recognized.getOrDefault("direction").getStr("UNKNOWN"),
+        status = "PENDING",
+        document_number = recognized.getOrDefault("invoiceId").getStr(""),
+        vendor_name = recognized.getOrDefault("vendorName").getStr(""),
+        vendor_vat_number = recognized.getOrDefault("vendorVatNumber").getStr(""),
+        vendor_address = recognized.getOrDefault("vendorAddress").getStr(""),
+        customer_name = recognized.getOrDefault("customerName").getStr(""),
+        customer_vat_number = recognized.getOrDefault("customerVatNumber").getStr(""),
+        customer_address = recognized.getOrDefault("customerAddress").getStr(""),
+        subtotal = recognized.getOrDefault("subtotal").getFloat(0.0),
+        total_tax = recognized.getOrDefault("totalTax").getFloat(0.0),
+        invoice_total = recognized.getOrDefault("invoiceTotal").getFloat(0.0),
+        validation_status = recognized.getOrDefault("validationStatus").getStr("PENDING"),
+        file_name = body.getOrDefault("fileName").getStr(""),
+        company_id = body["companyId"].getBiggestInt(),
+        created_by_id = 1
+      )
+
+      # Parse invoice date
+      let invoiceDateStr = recognized.getOrDefault("invoiceDate").getStr("")
+      if invoiceDateStr.len > 0:
+        try:
+          invoice.document_date = parse(invoiceDateStr.split("T")[0], "yyyy-MM-dd")
+        except:
+          invoice.document_date = now()
+
+      invoice.requires_manual_review = recognized.getOrDefault("requiresManualReview").getBool(false)
+      invoice.manual_review_reason = recognized.getOrDefault("manualReviewReason").getStr("")
+
+      # Store suggested account IDs
+      invoice.counterparty_account_id = recognized.getOrDefault("counterpartyAccountId").getBiggestInt(0)
+      invoice.vat_account_id = recognized.getOrDefault("vatAccountId").getBiggestInt(0)
+      invoice.expense_revenue_account_id = recognized.getOrDefault("expenseRevenueAccountId").getBiggestInt(0)
+
+      save(invoice, db)
+      resp Http201, jsonCors, $toJson(invoice)
+    except:
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
 
   get "/api/scanned-invoices/@id":
     let id = @"id".parseInt
-    resp Http200, jsonCors, $(%*{"id": id, "fileName": "invoice.pdf", "status": "UPLOADED", "lines": []})
+    let db = getDbConn()
+    try:
+      let invoiceOpt = find(ScannedInvoice, id, db)
+      if invoiceOpt.isSome:
+        resp Http200, jsonCors, $toJson(invoiceOpt.get())
+      else:
+        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
+    finally:
+      releaseDbConn(db)
 
   put "/api/scanned-invoices/@id":
     let id = @"id".parseInt
-    resp Http200, jsonCors, $(%*{"id": id, "fileName": "invoice.pdf", "status": "PROCESSING"})
+    let body = parseJson(request.body)
+    let db = getDbConn()
+    try:
+      var invoiceOpt = find(ScannedInvoice, id, db)
+      if invoiceOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
+        return
+
+      var invoice = invoiceOpt.get()
+      invoice.status = body.getOrDefault("status").getStr(invoice.status)
+      invoice.updated_at = now()
+      save(invoice, db)
+      resp Http200, jsonCors, $toJson(invoice)
+    except:
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
 
   delete "/api/scanned-invoices/@id":
     let id = @"id".parseInt
-    resp Http200, jsonCors, $(%*{"success": true})
+    let db = getDbConn()
+    try:
+      var invoiceOpt = find(ScannedInvoice, id, db)
+      if invoiceOpt.isSome:
+        var invoice = invoiceOpt.get()
+        delete(invoice, db)
+        resp Http200, jsonCors, $(%*{"success": true})
+      else:
+        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
+    finally:
+      releaseDbConn(db)
 
   post "/api/scanned-invoices/@id/process":
     let id = @"id".parseInt
-    resp Http200, jsonCors, $(%*{"id": id, "status": "PROCESSED"})
+    let db = getDbConn()
+    try:
+      var invoiceOpt = find(ScannedInvoice, id, db)
+      if invoiceOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Фактурата не е намерена"})
+        return
+
+      var invoice = invoiceOpt.get()
+      if invoice.status == "PROCESSED":
+        resp Http400, jsonCors, $(%*{"error": "Фактурата вече е обработена"})
+        return
+
+      # Create journal entry from scanned invoice
+      var entry = newJournalEntry(
+        document_date = invoice.document_date,
+        accounting_date = invoice.document_date,
+        document_number = invoice.document_number,
+        description = "Сканирана фактура от " & (if invoice.direction == "PURCHASE": invoice.vendor_name else: invoice.customer_name),
+        total_amount = invoice.invoice_total,
+        total_vat_amount = invoice.total_tax,
+        document_type = "INVOICE",
+        company_id = invoice.company_id,
+        created_by_id = invoice.created_by_id
+      )
+      save(entry, db)
+
+      # Create entry lines based on suggested accounts
+      var lineOrder = 0
+
+      # Counterparty line (401 or 411)
+      if invoice.counterparty_account_id > 0:
+        var counterpartyLine = newEntryLine(
+          debit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.invoice_total,
+          credit_amount = if invoice.direction == "PURCHASE": invoice.invoice_total else: 0.0,
+          description = invoice.document_number,
+          line_order = lineOrder,
+          journal_entry_id = entry.id,
+          account_id = invoice.counterparty_account_id
+        )
+        save(counterpartyLine, db)
+        inc lineOrder
+
+      # VAT line (4531 or 4532)
+      if invoice.vat_account_id > 0 and invoice.total_tax > 0:
+        var vatLine = newEntryLine(
+          debit_amount = if invoice.direction == "PURCHASE": invoice.total_tax else: 0.0,
+          credit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.total_tax,
+          description = "ДДС",
+          line_order = lineOrder,
+          journal_entry_id = entry.id,
+          account_id = invoice.vat_account_id
+        )
+        save(vatLine, db)
+        inc lineOrder
+
+      # Expense/Revenue line (6xx or 7xx)
+      if invoice.expense_revenue_account_id > 0:
+        var expRevLine = newEntryLine(
+          debit_amount = if invoice.direction == "PURCHASE": invoice.subtotal else: 0.0,
+          credit_amount = if invoice.direction == "PURCHASE": 0.0 else: invoice.subtotal,
+          description = "Данъчна основа",
+          line_order = lineOrder,
+          journal_entry_id = entry.id,
+          account_id = invoice.expense_revenue_account_id
+        )
+        save(expRevLine, db)
+
+      # Update invoice status
+      invoice.status = "PROCESSED"
+      invoice.journal_entry_id = entry.id.int64
+      invoice.updated_at = now()
+      save(invoice, db)
+
+      resp Http200, jsonCors, $(%*{"id": invoice.id, "status": "PROCESSED", "journalEntryId": entry.id})
+    except:
+      resp Http400, jsonCors, $(%*{"error": getCurrentExceptionMsg()})
+    finally:
+      releaseDbConn(db)
 
   # =====================
   # JOURNAL ROUTES
@@ -1945,6 +2151,7 @@ proc ensureAllTables() =
   ensureTable(db, EntryLine)
   ensureTable(db, BankProfile)
   ensureTable(db, AuditLog)
+  ensureTable(db, ScannedInvoice)
   echo "Database schema ready"
 
 proc main() =

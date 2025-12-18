@@ -139,7 +139,9 @@
     "revenue": "Приходи",
     "expense": "Разходи",
     "pleaseSelectCompany": "Моля, изберете фирма",
-    "codePlaceholder": "напр. 401"
+    "codePlaceholder": "напр. 401",
+    "analytical": "Аналитична",
+    "no_results": "Няма намерени сметки"
   },
   "journal": {
     "title": "Дневник",
@@ -148,6 +150,9 @@
     "edit_entry": "Редактиране на запис",
     "basic_info": "Основна информация",
     "date": "Дата",
+    "documentDate": "Дата на документ",
+    "accountingDate": "Счетоводна дата",
+    "documentType": "Тип на документа",
     "description": "Описание",
     "description_placeholder": "Описание на операцията...",
     "reference": "Референция",
@@ -173,7 +178,7 @@
     "filter": "Филтър",
     "export": "Експорт",
     "documentNumber": "Номер на документ",
-    "selectCounterpart": "-- Изберете контрагент --",
+    "selectCounterpart": "Избери контрагент",
     "newCounterpart": "+ Нов контрагент",
     "enterValidVat": "Въведете валиден ДДС номер (напр. BG123456789)",
     "validationError": "Грешка при валидация",
@@ -184,11 +189,19 @@
     "counterpartName": "Име *",
     "counterpartNamePlaceholder": "Име на контрагента...",
     "searchByNameEikVat": "Търси по име, ЕИК или ДДС...",
-    "createNewCounterpart": "+ Създай нов контрагент",
+    "searchByCodeOrName": "Търси по код или име...",
+    "createNewCounterpart": "Създай нов контрагент",
     "lines": "Редове",
-    "selectAccount": "-- Изберете сметка --",
-    "currencyAmount": "Сума във валута",
-    "addLine": "+ Добави ред"
+    "side": "Д/К",
+    "selectAccount": "Избери сметка",
+    "searchAccount": "Търси сметка...",
+    "currencyAmount": "Вал.сума",
+    "addLine": "Ред",
+    "vatSection": "ДДС данни за дневника",
+    "vatDocumentType": "Тип документ (НАП)",
+    "vatPurchaseOperation": "Операция покупки",
+    "vatSalesOperation": "Операция продажби",
+    "vatHint": "Попълнете за документи, които трябва да влязат в ДДС дневника. Изберете или покупка, или продажба."
   },
   "counterparts": {
     "title": "Контрагенти",
@@ -369,6 +382,9 @@
     "delete": "Изтрий",
     "edit": "Редактирай",
     "create": "Създай",
+    "update": "Обнови",
+    "remove": "Премахни",
+    "change": "Промени",
     "search": "Търсене",
     "filter": "Филтър",
     "export": "Експорт",
@@ -405,7 +421,8 @@
     "active": "Активен",
     "inactive": "Неактивен",
     "address": "Адрес",
-    "select_company": "Моля, изберете фирма"
+    "select_company": "Моля, изберете фирма",
+    "base_currency": "Базова валута"
   },
   "modals": {
     "confirmations": {

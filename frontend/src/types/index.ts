@@ -268,6 +268,12 @@ export interface EntryLine {
 export interface CreateJournalEntryInput {
   documentNumber?: string;
   description?: string;
+  documentDate?: string;
+  accountingDate?: string;
+  documentType?: string;
+  vatDocumentType?: string;
+  vatPurchaseOperation?: string;
+  vatSalesOperation?: string;
   totalAmount?: number;
   companyId: number;
   counterpartId?: number;
@@ -275,13 +281,16 @@ export interface CreateJournalEntryInput {
 }
 
 export interface CreateEntryLineInput {
+  accountId: number;
+  side?: 'debit' | 'credit';
+  amount?: number;
   debitAmount?: number;
   creditAmount?: number;
   currencyCode?: string;
   currencyAmount?: number;
   exchangeRate?: number;
   description?: string;
-  accountId: number;
+  counterpartId?: number;
 }
 
 // Currency
