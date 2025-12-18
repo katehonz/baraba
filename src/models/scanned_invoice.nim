@@ -37,6 +37,9 @@ type
     counterpart_id*: int64
     journal_entry_id*: int64
     created_by_id*: int64
+    # AI & Metadata
+    embedding*: seq[float32]  # For semantic search (stored as JSONB if pgvector missing)
+    metadata*: JsonField      # For extra extracted data
     created_at*: DateTime
     updated_at*: DateTime
 
@@ -88,6 +91,8 @@ proc newScannedInvoice*(
     counterpart_id: 0,
     journal_entry_id: 0,
     created_by_id: created_by_id,
+    embedding: @[],
+    metadata: newJsonField(),
     created_at: now(),
     updated_at: now()
   )

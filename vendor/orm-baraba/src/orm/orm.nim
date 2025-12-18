@@ -132,6 +132,12 @@ proc toSql*(vf: VectorField): string =
   ## Convert to SQL-safe vector literal
   $vf
 
+proc dbValue*(vf: VectorField): DbValue =
+  dbValue($vf)
+
+proc dbValue*[T](v: seq[T]): DbValue =
+  dbValue($(%v))
+
 proc `[]`*(vf: VectorField, idx: int): float32 =
   vf.data[idx]
 
@@ -295,6 +301,9 @@ proc `%`*(jf: JsonField): JsonNode =
   if jf.data.isNil:
     return newJObject()
   return jf.data
+
+proc dbValue*(jf: JsonField): DbValue =
+  dbValue($jf)
 
 # JSON field access helpers
 proc `[]`*(jf: JsonField, key: string): JsonNode =
@@ -763,6 +772,12 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
         quote do: newJsonField($`rowValue`)
       elif fieldTypeStr == "VectorField":
         quote do: newVectorField($`rowValue`)
+      elif fieldTypeStr.startsWith("seq["):
+        quote do:
+          if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
+            newSeq[typeof(`obj`.`fieldName`[0])](0)
+          else:
+            parseJson($`rowValue`).to(typeof(`obj`.`fieldName`))
       else:
         quote do: $`rowValue`
 
