@@ -353,8 +353,11 @@ router mainRouter:
   # =====================
   # COUNTERPART ROUTES
   # =====================
-  # extend counterpartRoutes()
-  # Counterpart routes are defined in separate file
+  get "/api/counterparts/company/@companyId":
+    withDb:
+      let companyId = parseInt(@"companyId")
+      var counterparts = findWhere(Counterpart, db, "company_id = $1 ORDER BY name", $companyId)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(counterparts)
 
   # =====================
   # CURRENCY ROUTES
