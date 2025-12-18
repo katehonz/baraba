@@ -1,4 +1,4 @@
-import { client } from './client';
+import { api } from './client';
 
 // Decode base64 and convert from Windows-1251 to UTF-8 for display
 const decodeBase64ToUtf8 = (base64: string): string => {
@@ -48,7 +48,7 @@ export interface VatGenerateResult {
 export const vatApi = {
   // Generate VAT files, returns both UTF-8 decoded strings (for display) and raw bytes (for download)
   generate: async (companyId: number, period: string): Promise<VatGenerateResult> => {
-    const response = await client.post(`/vat/generate/${period}`, { companyId });
+    const response = await api.post(`/api/vat/generate/${period}`, { companyId });
 
     const files: Record<string, string> = {};
     const rawFiles: Record<string, Uint8Array> = {};
