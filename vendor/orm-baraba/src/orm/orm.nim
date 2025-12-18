@@ -18,7 +18,7 @@ import std/re
 proc parsePgTimestamp*(s: string): DateTime =
   ## Parse PostgreSQL TIMESTAMP WITH TIME ZONE format manually
   ## Handles: "2025-12-17 22:31:57.123456+02" or "2025-12-17 22:31:57+02:00"
-  if s.len == 0 or s == "null":
+  if s.len == 0 or s == "null" or s == "NULL":
     return now()
 
   try:
@@ -109,7 +109,7 @@ proc newVectorField*(data: seq[float]): VectorField =
 
 proc newVectorField*(s: string): VectorField =
   ## Parse PostgreSQL vector format: [1.0,2.0,3.0]
-  if s == "" or s == "null":
+  if s == "" or s == "null" or s == "NULL":
     return newVectorField()
   var cleaned = s.strip()
   if cleaned.startsWith("["):
@@ -281,7 +281,7 @@ proc newJsonField*(j: JsonNode): JsonField =
   result.data = j
 
 proc newJsonField*(s: string): JsonField =
-  if s == "" or s == "null":
+  if s == "" or s == "null" or s == "NULL":
     result.data = newJObject()
   else:
     result.data = parseJson(s)
@@ -729,6 +729,30 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
               none(int64)
             else:
               some(parseBiggestInt($`rowValue`))
+        elif innerType == "int":
+          quote do:
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
+              none(int)
+            else:
+              some(parseInt($`rowValue`))
+        elif innerType == "float" or innerType == "float64":
+          quote do:
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
+              none(float)
+            else:
+              some(parseFloat($`rowValue`))
+        elif innerType == "bool":
+          quote do:
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
+              none(bool)
+            else:
+              some(parsePgBool($`rowValue`))
+        elif innerType == "string":
+          quote do:
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
+              none(string)
+            else:
+              some(getRawString(`rowValue`))
         else:
           quote do:
             if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
