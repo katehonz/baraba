@@ -22,7 +22,6 @@ type
     manager_egn*: string
     authorized_person_egn*: string
     nap_office*: string
-    representative_type*: string  # "MANAGER" or "AUTHORIZED_PERSON"
     is_active*: bool
     enable_vies_validation*: bool
     enable_ai_mapping*: bool
@@ -40,6 +39,7 @@ type
     salt_edge_enabled*: bool
     created_at*: DateTime
     updated_at*: DateTime
+    representative_type*: string  # "MANAGER" or "AUTHORIZED_PERSON" - must be last to match DB column order
 
 proc newCompany*(
   name = "",
@@ -81,7 +81,6 @@ proc newCompany*(
     manager_egn: "",
     authorized_person_egn: "",
     nap_office: "",
-    representative_type: "MANAGER",
     is_active: is_active,
     enable_vies_validation: false,
     enable_ai_mapping: false,
@@ -98,7 +97,8 @@ proc newCompany*(
     salt_edge_app_id: salt_edge_app_id,
     salt_edge_enabled: salt_edge_enabled,
     created_at: now(),
-    updated_at: now()
+    updated_at: now(),
+    representative_type: "MANAGER"
   )
 
 proc getAccountId*(company: Company, fieldName: string): Option[int64] =

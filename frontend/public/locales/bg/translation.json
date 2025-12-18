@@ -146,14 +146,18 @@
     "entries": "Записи",
     "new_entry": "Нов запис",
     "edit_entry": "Редактиране на запис",
+    "basic_info": "Основна информация",
     "date": "Дата",
     "description": "Описание",
+    "description_placeholder": "Описание на операцията...",
     "reference": "Референция",
     "debit_account": "Дебитна сметка",
     "credit_account": "Кредитна сметка",
+    "account": "Сметка",
     "amount": "Сума",
     "currency": "Валута",
     "exchange_rate": "Обменен курс",
+    "exchangeRate": "Курс",
     "total_debit": "Общ дебит",
     "total_credit": "Общ кредит",
     "balance": "Баланс",
@@ -226,7 +230,8 @@
     "delete_error": "Грешка при изтриване",
     "created": "Контрагентът е създаден",
     "updated": "Контрагентът е обновен",
-    "deleted": "Контрагентът е изтрит"
+    "deleted": "Контрагентът е изтрит",
+    "no_results": "Няма намерени контрагенти"
   },
   "banks": {
     "loadError": "Грешка при зареждане на данни",
@@ -398,7 +403,9 @@
     "amount": "Сума",
     "currency": "Валута",
     "active": "Активен",
-    "inactive": "Неактивен"
+    "inactive": "Неактивен",
+    "address": "Адрес",
+    "select_company": "Моля, изберете фирма"
   },
   "modals": {
     "confirmations": {

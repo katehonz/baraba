@@ -1,6 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Box,
+  Button,
+  FormControl,
+  FormLabel,
+  Input,
+  Select,
+  VStack,
+  HStack,
+  Heading,
+  Text,
+  IconButton,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  useDisclosure,
+  Alert,
+  AlertIcon,
+  Spinner,
+  Center,
+  Grid,
+  GridItem,
+  Divider,
+  Badge,
+  useColorModeValue,
+} from '@chakra-ui/react';
 import { useCompany } from '../../contexts/CompanyContext';
 import { accountsApi } from '../../api/accounts';
 import { counterpartsApi } from '../../api/counterparts';
@@ -26,6 +56,9 @@ export default function JournalEntryFormPage() {
     const { companyId } = useCompany();
     const isEdit = !!id;
 
+    const cardBg = useColorModeValue('white', 'gray.800');
+    const borderColor = useColorModeValue('gray.200', 'gray.600');
+
     const [formData, setFormData] = useState<CreateJournalEntryInput>({
         documentNumber: '',
         description: '',
@@ -38,8 +71,7 @@ export default function JournalEntryFormPage() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    // Counterpart modal state
-    const [showCounterpartModal, setShowCounterpartModal] = useState(false);
+    const { isOpen, onOpen, onClose } = useDisclosure();
     const [counterpartSearch, setCounterpartSearch] = useState('');
     const [showNewCounterpartForm, setShowNewCounterpartForm] = useState(false);
     const [newCounterpart, setNewCounterpart] = useState({
@@ -82,8 +114,7 @@ export default function JournalEntryFormPage() {
         }
     }, [id, isEdit]);
 
-
-    const handleLineChange = (index: number, field: keyof CreateEntryLineInput, value: any) => {
+    const handleLineChange = (index: number, field: keyof CreateEntryLineInput, value: number | string) => {
         const newLines = [...(formData.lines || [])];
         const line = { ...newLines[index], [field]: value };
 
@@ -99,7 +130,7 @@ export default function JournalEntryFormPage() {
         newLines[index] = line;
         setFormData({ ...formData, lines: newLines });
     };
-    
+
     const addLine = () => {
         setFormData({ ...formData, lines: [...(formData.lines || []), newEmptyLine()] });
     };
@@ -115,15 +146,15 @@ export default function JournalEntryFormPage() {
         setError('Въведете валиден ДДС номер (напр. BG123456789)');
         return;
       }
-  
+
       setViesLoading(true);
       setError('');
       setViesResult(null);
-  
+
       try {
         const result = await viesApi.validateVat(newCounterpart.vatNumber);
         setViesResult(result);
-  
+
         if (result.valid) {
           setNewCounterpart(prev => ({
             ...prev,
@@ -137,10 +168,10 @@ export default function JournalEntryFormPage() {
         setViesLoading(false);
       }
     };
-  
+
     const handleCreateCounterpart = async () => {
       if (!newCounterpart.name.trim() || !companyId) return;
-  
+
       try {
         const created = await counterpartsApi.create({
           companyId,
@@ -151,19 +182,14 @@ export default function JournalEntryFormPage() {
         setCounterparts(prev => [...prev, created]);
         setFormData(prev => ({ ...prev, counterpartId: created.id }));
         setShowNewCounterpartForm(false);
-        setShowCounterpartModal(false);
-        setNewCounterpart({
-          name: '',
-          eik: '',
-          vatNumber: '',
-        });
+        onClose();
+        setNewCounterpart({ name: '', eik: '', vatNumber: '' });
         setViesResult(null);
         setCounterpartSearch('');
       } catch (err) {
         console.error('Error creating counterpart:', err);
       }
     };
-
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -183,268 +209,339 @@ export default function JournalEntryFormPage() {
                 await journalApi.create(input);
             }
             navigate('/journal/entries');
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Грешка');
         }
     };
 
-        if (isLoading) {
-            return <div>{t('common.loading')}</div>;
-        }
-    
+    const handleCloseModal = () => {
+      onClose();
+      setShowNewCounterpartForm(false);
+      setCounterpartSearch('');
+      setNewCounterpart({ name: '', eik: '', vatNumber: '' });
+      setViesResult(null);
+    };
+
+    const filteredCounterparts = counterparts.filter(c =>
+      c.name.toLowerCase().includes(counterpartSearch.toLowerCase()) ||
+      (c.eik && c.eik.includes(counterpartSearch)) ||
+      (c.vatNumber && c.vatNumber.toLowerCase().includes(counterpartSearch.toLowerCase()))
+    );
+
+    const selectedCounterpart = counterparts.find(c => c.id === formData.counterpartId);
+
+    if (!companyId) {
         return (
-            <div className="space-y-6">
-                <h1 className="text-2xl font-bold">{isEdit ? t('journal.edit_entry') : t('journal.new_entry')}</h1>
-                {error && <div className="text-red-500">{error}</div>}
-    
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label>{t('journal.documentNumber')}</label>
-                        <input
-                            type="text"
-                            value={formData.documentNumber}
-                            onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
-                            className="w-full p-2 border"
-                        />
-                    </div>
-                    <div>
-                        <label>{t('journal.description')}</label>
-                        <input
-                            type="text"
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="w-full p-2 border"
-                        />
-                    </div>
-                    <div>
-                        <label>{t('counterparts.title')}</label>
-                        <select
-                            value={formData.counterpartId || ''}
-                            onChange={(e) => setFormData({ ...formData, counterpartId: parseInt(e.target.value, 10) })}
-                            className="w-full p-2 border"
-                        >
-                                      <option value="">{t('journal.selectCounterpart')}</option>
-                                      {counterparts.map(c => (
-                                          <option key={c.id} value={c.id}>{c.name}</option>
-                                      ))}
-                                  </select>
-                              </div>
-                            
-                              <button type="button" onClick={() => setShowCounterpartModal(true)}>{t('journal.newCounterpart')}</button>
-                            
-                              {showCounterpartModal && (
-                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                    <div className="bg-white rounded-lg w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col">
-                                        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                                          <h2 className="text-lg font-semibold text-gray-900">
-                                            {showNewCounterpartForm ? t('counterparts.create') : t('journal.selectCounterpart')}
-                                          </h2>
-                                          <button
-                                            onClick={() => {
-                                              setShowCounterpartModal(false);
-                                              setShowNewCounterpartForm(false);
-                                              setCounterpartSearch('');
-                                              setNewCounterpart({ name: '', eik: '', vatNumber: '' });
-                                              setViesResult(null);
-                                            }}
-                                            className="text-gray-400 hover:text-gray-600"
-                                          >
-                                            ✕
-                                          </button>
-                                        </div>
-                                        {showNewCounterpartForm ? (
-                                            <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
-                                              {viesResult && (
-                                                <div className={`rounded-lg p-3 text-sm ${
-                                                  viesResult.valid
-                                                    ? 'bg-green-50 border border-green-200 text-green-700'
-                                                    : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
-                                                }`}>
-                                                  {viesResult.valid ? (
-                                                    <div>
-                                                      <div className="font-medium">{t('journal.validVatNumber')} ({viesResult.source})</div>
-                                                      {viesResult.name && <div className="mt-1">{t('common.name')}: {viesResult.name}</div>}
-                                                      {viesResult.longAddress && <div>{t('common.address')}: {viesResult.longAddress}</div>}
-                                                    </div>
-                                                  ) : (
-                                                    <div className="font-medium">{viesResult.errorMessage || t('journal.vatNotValid')}</div>
-                                                  )}
-                                                </div>
-                                              )}
-                                              <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('counterparts.vat_number')}</label>
-                                                <div className="flex gap-2">
-                                                  <input
-                                                    type="text"
-                                                    value={newCounterpart.vatNumber}
-                                                    onChange={(e) => setNewCounterpart({ ...newCounterpart, vatNumber: e.target.value.toUpperCase() })}
-                                                    className="block flex-1 rounded-md border-gray-300 shadow-sm sm:text-sm"
-                                                    placeholder="BG123456789"
-                                                  />
-                                                  <button
-                                                    type="button"
-                                                    onClick={handleValidateVat}
-                                                    disabled={viesLoading || !newCounterpart.vatNumber}
-                                                    className="px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
-                                                  >
-                                                    {viesLoading ? t('journal.viesChecking') : t('journal.checkVies')}
-                                                  </button>
-                                                </div>
-                                              </div>
-                                              <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('journal.counterpartName')}</label>
-                                                <input
-                                                  type="text"
-                                                  value={newCounterpart.name}
-                                                  onChange={(e) => setNewCounterpart({ ...newCounterpart, name: e.target.value })}
-                                                  className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
-                                                  placeholder={t('journal.counterpartNamePlaceholder')}
-                                                />
-                                              </div>
-                                              <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('counterparts.eik')}</label>
-                                                <input
-                                                  type="text"
-                                                  value={newCounterpart.eik}
-                                                  onChange={(e) => setNewCounterpart({ ...newCounterpart, eik: e.target.value })}
-                                                  className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
-                                                  placeholder="123456789"
-                                                />
-                                              </div>
-                                              <div className="flex justify-end gap-3 pt-4 border-t">
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setShowNewCounterpartForm(false)}
-                                                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-                                                >
-                                                  {t('common.back')}
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={handleCreateCounterpart}
-                                                  disabled={!newCounterpart.name.trim()}
-                                                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
-                                                >
-                                                  {t('counterparts.create')}
-                                                </button>
-                                              </div>
-                                            </div>
-                                        ) : (
-                                          <>
-                                            <div className="p-3 border-b">
-                                              <input
-                                                type="text"
-                                                value={counterpartSearch}
-                                                onChange={(e) => setCounterpartSearch(e.target.value)}
-                                                className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
-                                                placeholder={t('journal.searchByNameEikVat')}
-                                                autoFocus
-                                              />
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto">
-                                              {counterparts.filter(c => c.name.toLowerCase().includes(counterpartSearch.toLowerCase())).map(counterpart => (
-                                                <button
-                                                  key={counterpart.id}
-                                                  type="button"
-                                                  onClick={() => {
-                                                    setFormData({...formData, counterpartId: counterpart.id});
-                                                    setShowCounterpartModal(false);
-                                                  }}
-                                                  className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left"
-                                                >
-                                                  <div className="flex-1 min-w-0">
-                                                    <div className="font-medium text-gray-900 text-sm truncate">{counterpart.name}</div>
-                                                    {counterpart.eik && <div className="text-xs text-gray-500">{t('companies.eik_prefix')}{counterpart.eik}</div>}
-                                                  </div>
-                                                </button>
-                                              ))}
-                                            </div>
-                                            <div className="p-3 border-t bg-gray-50">
-                                              <button
-                                                type="button"
-                                                onClick={() => setShowNewCounterpartForm(true)}
-                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md"
-                                              >
-                                                {t('journal.createNewCounterpart')}
-                                              </button>
-                                            </div>
-                                          </>
-                                        )}
-                                    </div>
-                                </div>
-                              )}
-                            
-                              <h2 className="text-xl font-bold">{t('journal.lines')}</h2>
-                              <div className="space-y-2">
-                                  {formData.lines?.map((line, index) => (
-                                      <div key={index} className="flex gap-2 items-center">
-                                          <select
-                                              value={line.accountId}
-                                              onChange={(e) => handleLineChange(index, 'accountId', parseInt(e.target.value, 10))}
-                                              className="p-2 border"
-                                          >
-                                              <option value={0}>{t('journal.selectAccount')}</option>
-                                              {accounts.map(a => (
-                                                  <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
-                                              ))}
-                                          </select>
-                                          <input
-                                              type="number"
-                                              placeholder={t('accounts.debit')}
-                                              value={line.debitAmount}
-                                              onChange={(e) => handleLineChange(index, 'debitAmount', parseFloat(e.target.value))}
-                                              className="p-2 border"
-                                          />
-                                          <input
-                                              type="number"
-                                              placeholder={t('accounts.credit')}
-                                              value={line.creditAmount}
-                                              onChange={(e) => handleLineChange(index, 'creditAmount', parseFloat(e.target.value))}
-                                              className="p-2 border"
-                                          />
-                                          <input
-                                              type="text"
-                                              placeholder={t('journal.description')}
-                                              value={line.description}
-                                              onChange={(e) => handleLineChange(index, 'description', e.target.value)}
-                                              className="p-2 border"
-                                          />
-                                          <select
-                                              value={line.currencyCode}
-                                              onChange={(e) => handleLineChange(index, 'currencyCode', e.target.value)}
-                                              className="p-2 border"
-                                          >
-                                              {currencies.map(c => (
-                                                  <option key={c.id} value={c.code}>{c.code}</option>
-                                              ))}
-                                          </select>
-                                          <input
-                                              type="number"
-                                              placeholder={t('journal.currencyAmount')}
-                                              value={line.currencyAmount}
-                                              onChange={(e) => handleLineChange(index, 'currencyAmount', parseFloat(e.target.value))}
-                                              className="p-2 border"
-                                              disabled={line.currencyCode === 'BGN'}
-                                          />
-                                          <input
-                                              type="number"
-                                              placeholder={t('journal.exchangeRate')}
-                                              value={line.exchangeRate}
-                                              onChange={(e) => handleLineChange(index, 'exchangeRate', parseFloat(e.target.value))}
-                                              className="p-2 border"
-                                              disabled={line.currencyCode === 'BGN'}
-                                          />
-                                          <button type="button" onClick={() => removeLine(index)} className="text-red-500">X</button>
-                                      </div>
-                                  ))}
-                              </div>
-                              <button type="button" onClick={addLine}>{t('journal.addLine')}</button>
-                            
-                              <div className="flex justify-end gap-4">
-                                  <button type="button" onClick={() => navigate('/journal/entries')} className="px-4 py-2 bg-gray-200">{t('common.cancel')}</button>
-                                  <button type="submit" className="px-4 py-2 bg-blue-500 text-white">{t('common.save')}</button>
-                              </div>
-                            </form>
-                            </div>
-                            );
+            <Center h="200px">
+                <Text color="gray.500">{t('common.select_company')}</Text>
+            </Center>
+        );
     }
+
+    if (isLoading) {
+        return (
+            <Center h="200px">
+                <Spinner size="xl" color="brand.500" />
+            </Center>
+        );
+    }
+
+    return (
+        <VStack spacing={6} align="stretch">
+            <HStack justify="space-between">
+                <Heading size="lg">{isEdit ? t('journal.edit_entry') : t('journal.new_entry')}</Heading>
+            </HStack>
+
+            {error && (
+                <Alert status="error" borderRadius="md">
+                    <AlertIcon />
+                    {error}
+                </Alert>
+            )}
+
+            <Box as="form" onSubmit={handleSubmit}>
+                <VStack spacing={6} align="stretch">
+                    <Box bg={cardBg} p={6} borderRadius="xl" border="1px" borderColor={borderColor}>
+                        <VStack spacing={4} align="stretch">
+                            <Heading size="md">{t('journal.basic_info')}</Heading>
+                            <Grid templateColumns="repeat(2, 1fr)" gap={4}>
+                                <GridItem>
+                                    <FormControl>
+                                        <FormLabel>{t('journal.documentNumber')}</FormLabel>
+                                        <Input
+                                            value={formData.documentNumber}
+                                            onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
+                                            placeholder="0000000001"
+                                        />
+                                    </FormControl>
+                                </GridItem>
+                                <GridItem>
+                                    <FormControl>
+                                        <FormLabel>{t('counterparts.title')}</FormLabel>
+                                        <HStack>
+                                            <Box flex="1" onClick={onOpen} cursor="pointer">
+                                                <Input
+                                                    value={selectedCounterpart?.name || ''}
+                                                    placeholder={t('journal.selectCounterpart')}
+                                                    readOnly
+                                                    cursor="pointer"
+                                                />
+                                            </Box>
+                                            <Button onClick={onOpen} colorScheme="blue" variant="outline">
+                                                ...
+                                            </Button>
+                                        </HStack>
+                                    </FormControl>
+                                </GridItem>
+                            </Grid>
+                            <FormControl>
+                                <FormLabel>{t('journal.description')}</FormLabel>
+                                <Input
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    placeholder={t('journal.description_placeholder')}
+                                />
+                            </FormControl>
+                        </VStack>
+                    </Box>
+
+                    <Box bg={cardBg} p={6} borderRadius="xl" border="1px" borderColor={borderColor}>
+                        <VStack spacing={4} align="stretch">
+                            <HStack justify="space-between">
+                                <Heading size="md">{t('journal.lines')}</Heading>
+                                <Button onClick={addLine} colorScheme="blue" size="sm">
+                                    + {t('journal.addLine')}
+                                </Button>
+                            </HStack>
+
+                            <Box overflowX="auto">
+                                <Grid templateColumns="2fr 1fr 1fr 2fr 100px 100px 100px 40px" gap={2} mb={2} fontWeight="bold" fontSize="sm" color="gray.600">
+                                    <Text>{t('journal.account')}</Text>
+                                    <Text>{t('accounts.debit')}</Text>
+                                    <Text>{t('accounts.credit')}</Text>
+                                    <Text>{t('journal.description')}</Text>
+                                    <Text>{t('currencies.title')}</Text>
+                                    <Text>{t('journal.currencyAmount')}</Text>
+                                    <Text>{t('journal.exchangeRate')}</Text>
+                                    <Text></Text>
+                                </Grid>
+
+                                {formData.lines?.map((line, index) => (
+                                    <Grid key={index} templateColumns="2fr 1fr 1fr 2fr 100px 100px 100px 40px" gap={2} mb={2}>
+                                        <Select
+                                            value={line.accountId}
+                                            onChange={(e) => handleLineChange(index, 'accountId', parseInt(e.target.value, 10))}
+                                            size="sm"
+                                        >
+                                            <option value={0}>{t('journal.selectAccount')}</option>
+                                            {accounts.map(a => (
+                                                <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+                                            ))}
+                                        </Select>
+                                        <Input
+                                            type="number"
+                                            value={line.debitAmount || ''}
+                                            onChange={(e) => handleLineChange(index, 'debitAmount', parseFloat(e.target.value) || 0)}
+                                            size="sm"
+                                        />
+                                        <Input
+                                            type="number"
+                                            value={line.creditAmount || ''}
+                                            onChange={(e) => handleLineChange(index, 'creditAmount', parseFloat(e.target.value) || 0)}
+                                            size="sm"
+                                        />
+                                        <Input
+                                            value={line.description}
+                                            onChange={(e) => handleLineChange(index, 'description', e.target.value)}
+                                            size="sm"
+                                        />
+                                        <Select
+                                            value={line.currencyCode}
+                                            onChange={(e) => handleLineChange(index, 'currencyCode', e.target.value)}
+                                            size="sm"
+                                        >
+                                            {currencies.map(c => (
+                                                <option key={c.id} value={c.code}>{c.code}</option>
+                                            ))}
+                                        </Select>
+                                        <Input
+                                            type="number"
+                                            value={line.currencyAmount || ''}
+                                            onChange={(e) => handleLineChange(index, 'currencyAmount', parseFloat(e.target.value) || 0)}
+                                            size="sm"
+                                            isDisabled={line.currencyCode === 'BGN'}
+                                        />
+                                        <Input
+                                            type="number"
+                                            value={line.exchangeRate || ''}
+                                            onChange={(e) => handleLineChange(index, 'exchangeRate', parseFloat(e.target.value) || 0)}
+                                            size="sm"
+                                            isDisabled={line.currencyCode === 'BGN'}
+                                        />
+                                        <IconButton
+                                            aria-label="Remove line"
+                                            icon={<Text>×</Text>}
+                                            onClick={() => removeLine(index)}
+                                            colorScheme="red"
+                                            variant="ghost"
+                                            size="sm"
+                                        />
+                                    </Grid>
+                                ))}
+                            </Box>
+                        </VStack>
+                    </Box>
+
+                    <HStack justify="flex-end" spacing={4}>
+                        <Button variant="ghost" onClick={() => navigate('/journal/entries')}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button type="submit" colorScheme="brand">
+                            {t('common.save')}
+                        </Button>
+                    </HStack>
+                </VStack>
+            </Box>
+
+            <Modal isOpen={isOpen} onClose={handleCloseModal} size="lg">
+                <ModalOverlay />
+                <ModalContent>
+                    <ModalHeader>
+                        {showNewCounterpartForm ? t('counterparts.create') : t('journal.selectCounterpart')}
+                    </ModalHeader>
+                    <ModalCloseButton />
+                    <ModalBody>
+                        {showNewCounterpartForm ? (
+                            <VStack spacing={4} align="stretch">
+                                {viesResult && (
+                                    <Alert status={viesResult.valid ? 'success' : 'warning'} borderRadius="md">
+                                        <AlertIcon />
+                                        <Box>
+                                            {viesResult.valid ? (
+                                                <>
+                                                    <Text fontWeight="bold">{t('journal.validVatNumber')} ({viesResult.source})</Text>
+                                                    {viesResult.name && <Text fontSize="sm">{t('common.name')}: {viesResult.name}</Text>}
+                                                    {viesResult.longAddress && <Text fontSize="sm">{t('common.address')}: {viesResult.longAddress}</Text>}
+                                                </>
+                                            ) : (
+                                                <Text fontWeight="bold">{viesResult.errorMessage || t('journal.vatNotValid')}</Text>
+                                            )}
+                                        </Box>
+                                    </Alert>
+                                )}
+                                <FormControl>
+                                    <FormLabel>{t('counterparts.vat_number')}</FormLabel>
+                                    <HStack>
+                                        <Input
+                                            value={newCounterpart.vatNumber}
+                                            onChange={(e) => setNewCounterpart({ ...newCounterpart, vatNumber: e.target.value.toUpperCase() })}
+                                            placeholder="BG123456789"
+                                        />
+                                        <Button
+                                            onClick={handleValidateVat}
+                                            isLoading={viesLoading}
+                                            isDisabled={!newCounterpart.vatNumber}
+                                            colorScheme="green"
+                                        >
+                                            {t('journal.checkVies')}
+                                        </Button>
+                                    </HStack>
+                                </FormControl>
+                                <FormControl>
+                                    <FormLabel>{t('journal.counterpartName')}</FormLabel>
+                                    <Input
+                                        value={newCounterpart.name}
+                                        onChange={(e) => setNewCounterpart({ ...newCounterpart, name: e.target.value })}
+                                        placeholder={t('journal.counterpartNamePlaceholder')}
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <FormLabel>{t('counterparts.eik')}</FormLabel>
+                                    <Input
+                                        value={newCounterpart.eik}
+                                        onChange={(e) => setNewCounterpart({ ...newCounterpart, eik: e.target.value })}
+                                        placeholder="123456789"
+                                    />
+                                </FormControl>
+                            </VStack>
+                        ) : (
+                            <VStack spacing={4} align="stretch">
+                                <Input
+                                    value={counterpartSearch}
+                                    onChange={(e) => setCounterpartSearch(e.target.value)}
+                                    placeholder={t('journal.searchByNameEikVat')}
+                                    autoFocus
+                                />
+                                <Divider />
+                                <Box maxH="300px" overflowY="auto">
+                                    {filteredCounterparts.length === 0 ? (
+                                        <Text color="gray.500" textAlign="center" py={4}>
+                                            {t('counterparts.no_results')}
+                                        </Text>
+                                    ) : (
+                                        filteredCounterparts.map(counterpart => (
+                                            <Box
+                                                key={counterpart.id}
+                                                p={3}
+                                                cursor="pointer"
+                                                _hover={{ bg: 'gray.50' }}
+                                                borderRadius="md"
+                                                onClick={() => {
+                                                    setFormData({ ...formData, counterpartId: counterpart.id });
+                                                    handleCloseModal();
+                                                }}
+                                            >
+                                                <Text fontWeight="medium">{counterpart.name}</Text>
+                                                <HStack spacing={2} mt={1}>
+                                                    {counterpart.eik && (
+                                                        <Badge colorScheme="gray" fontSize="xs">
+                                                            {t('companies.eik_prefix')}{counterpart.eik}
+                                                        </Badge>
+                                                    )}
+                                                    {counterpart.vatNumber && (
+                                                        <Badge colorScheme="blue" fontSize="xs">
+                                                            {counterpart.vatNumber}
+                                                        </Badge>
+                                                    )}
+                                                </HStack>
+                                            </Box>
+                                        ))
+                                    )}
+                                </Box>
+                                <Divider />
+                                <Button
+                                    onClick={() => setShowNewCounterpartForm(true)}
+                                    colorScheme="blue"
+                                    variant="ghost"
+                                    w="full"
+                                >
+                                    + {t('journal.createNewCounterpart')}
+                                </Button>
+                            </VStack>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        {showNewCounterpartForm ? (
+                            <HStack spacing={3}>
+                                <Button variant="ghost" onClick={() => setShowNewCounterpartForm(false)}>
+                                    {t('common.back')}
+                                </Button>
+                                <Button
+                                    colorScheme="brand"
+                                    onClick={handleCreateCounterpart}
+                                    isDisabled={!newCounterpart.name.trim()}
+                                >
+                                    {t('counterparts.create')}
+                                </Button>
+                            </HStack>
+                        ) : (
+                            <Button variant="ghost" onClick={handleCloseModal}>
+                                {t('common.cancel')}
+                            </Button>
+                        )}
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+        </VStack>
+    );
+}
