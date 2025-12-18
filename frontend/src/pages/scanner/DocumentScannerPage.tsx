@@ -35,13 +35,12 @@ import {
   AccordionButton,
   AccordionPanel,
   AccordionIcon,
-  Code,
-  Link,
   List,
   ListItem,
 } from '@chakra-ui/react';
 import { useCompany } from '../../contexts/CompanyContext';
 import { scannerApi } from '../../api/scanner';
+import { useTranslation } from 'react-i18next';
 import type { RecognizedInvoice } from '../../types';
 
 // Icons
@@ -74,6 +73,7 @@ const MAX_FILE_SIZE_MB = 50;
 type InvoiceType = 'purchase' | 'sales';
 
 export default function DocumentScannerPage() {
+  const { t } = useTranslation();
   const { companyId } = useCompany();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,10 +99,10 @@ export default function DocumentScannerPage() {
     try {
       await scannerApi.saveScannedInvoice(companyId, data, file?.name);
       setSaveSuccess(true);
-      toast({ title: 'Invoice saved successfully', status: 'success' });
+      toast({ title: t('scanner.invoiceSavedSuccessfully'), status: 'success' });
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
-      toast({ title: error.message || 'Error saving', status: 'error' });
+      toast({ title: error.message || t('scanner.errorSaving'), status: 'error' });
     } finally {
       setSaving(false);
     }
@@ -113,20 +113,20 @@ export default function DocumentScannerPage() {
     setData(null);
 
     if (!companyId) {
-      setFileError('Please select a company from the menu above.');
+      setFileError(t('scanner.pleaseSelectCompany'));
       return;
     }
 
     if (!selectedFile) return;
 
     if (selectedFile.type !== 'application/pdf') {
-      setFileError('Please select a PDF file.');
+      setFileError(t('common.pdfOnly'));
       return;
     }
 
     const fileSizeMB = selectedFile.size / (1024 * 1024);
     if (fileSizeMB > MAX_FILE_SIZE_MB) {
-      setFileError(`File too large (${fileSizeMB.toFixed(1)} MB). Maximum size is ${MAX_FILE_SIZE_MB} MB.`);
+      setFileError(t('scanner.fileTooLarge', { size: fileSizeMB.toFixed(1), maxSize: MAX_FILE_SIZE_MB }));
       return;
     }
 
@@ -136,9 +136,9 @@ export default function DocumentScannerPage() {
     try {
       const result = await scannerApi.scanInvoice(selectedFile, invoiceType, companyId);
       setData(result);
-      toast({ title: 'Document scanned successfully', status: 'success' });
+      toast({ title: t('scanner.documentScannedSuccessfully'), status: 'success' });
     } catch (error: any) {
-      toast({ title: error.message || 'Scan error', status: 'error' });
+      toast({ title: error.message || t('scanner.scanError'), status: 'error' });
     } finally {
       setLoading(false);
     }
@@ -188,9 +188,9 @@ export default function DocumentScannerPage() {
         >
           <Icon as={DocumentIcon} color="white" />
         </Flex>
-        <Heading size="xl">AI Invoice Scanning</Heading>
+        <Heading size="xl">{t('scanner.aiScanningTitle')}</Heading>
         <Text color="gray.500" maxW="xl">
-          Upload PDF invoices for automatic data extraction using Azure Document Intelligence
+          {t('scanner.aiScanningDesc')}
         </Text>
       </VStack>
 
@@ -203,7 +203,7 @@ export default function DocumentScannerPage() {
             onClick={() => setInvoiceType('purchase')}
             leftIcon={<Text>🛒</Text>}
           >
-            Purchase Invoices
+            {t('scanner.purchaseInvoices')}
           </Button>
           <Button
             colorScheme={invoiceType === 'sales' ? 'green' : 'gray'}
@@ -211,7 +211,7 @@ export default function DocumentScannerPage() {
             onClick={() => setInvoiceType('sales')}
             leftIcon={<Text>💰</Text>}
           >
-            Sales Invoices
+            {t('scanner.salesInvoices')}
           </Button>
         </ButtonGroup>
       </Center>
@@ -258,17 +258,17 @@ export default function DocumentScannerPage() {
             {companyId ? (
               <>
                 <Text fontSize="lg" fontWeight="medium">
-                  Drag file here or click to select
+                  {t('scanner.dragFileText')}
                 </Text>
                 <Text color="gray.500" fontSize="sm">
-                  Supports PDF files up to {MAX_FILE_SIZE_MB} MB (up to 10+ pages)
+                  {t('scanner.supportsPdfText', { maxSize: MAX_FILE_SIZE_MB })}
                 </Text>
                 <Button colorScheme="blue" size="lg">
-                  Select PDF File
+                  {t('scanner.selectPdfFile')}
                 </Button>
               </>
             ) : (
-              <Text color="gray.500">Please select a company from the menu above</Text>
+              <Text color="gray.500">{t('scanner.pleaseSelectCompany')}</Text>
             )}
 
             {file && !loading && (
@@ -296,8 +296,8 @@ export default function DocumentScannerPage() {
           <CardBody py={12}>
             <VStack spacing={4}>
               <Spinner size="xl" color="blue.500" thickness="4px" />
-              <Text fontSize="lg" fontWeight="medium">Scanning document...</Text>
-              <Text color="gray.500">Extracting data with AI</Text>
+              <Text fontSize="lg" fontWeight="medium">{t('scanner.scanningDocument')}</Text>
+              <Text color="gray.500">{t('scanner.extractingData')}</Text>
               <Progress size="sm" isIndeterminate w="50%" colorScheme="blue" borderRadius="full" />
             </VStack>
           </CardBody>
@@ -313,10 +313,10 @@ export default function DocumentScannerPage() {
                 <Flex w={10} h={10} bg="green.100" borderRadius="full" align="center" justify="center">
                   <Icon as={CheckIcon} color="green.600" />
                 </Flex>
-                <Box>
-                  <Heading size="md">Extracted Data</Heading>
-                  <Text fontSize="sm" color="gray.500">Successfully recognized by AI</Text>
-                </Box>
+                 <Box>
+                   <Heading size="md">{t('scanner.extractedData')}</Heading>
+                   <Text fontSize="sm" color="gray.500">{t('scanner.successfullyRecognized')}</Text>
+                 </Box>
               </HStack>
               <Badge
                 colorScheme={data.direction === 'PURCHASE' ? 'blue' : data.direction === 'SALE' ? 'green' : 'yellow'}
@@ -332,30 +332,30 @@ export default function DocumentScannerPage() {
           <CardBody>
             <VStack spacing={6} align="stretch">
               {/* Manual Review Warning */}
-              {data.requiresManualReview && (
-                <Alert status="warning" borderRadius="lg">
-                  <AlertIcon as={WarningIcon} />
-                  <Box>
-                    <AlertTitle>Manual Review Required</AlertTitle>
-                    <AlertDescription>{data.manualReviewReason}</AlertDescription>
-                  </Box>
-                </Alert>
-              )}
+               {data.requiresManualReview && (
+                 <Alert status="warning" borderRadius="lg">
+                   <AlertIcon as={WarningIcon} />
+                   <Box>
+                     <AlertTitle>{t('scanner.manualReviewRequired')}</AlertTitle>
+                     <AlertDescription>{data.manualReviewReason}</AlertDescription>
+                   </Box>
+                 </Alert>
+               )}
 
               {/* Vendor Section */}
-              <Box>
-                <Text fontWeight="bold" color="gray.600" mb={3}>Vendor (Seller)</Text>
-                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-                  <FormControl>
-                    <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Name</FormLabel>
+               <Box>
+                 <Text fontWeight="bold" color="gray.600" mb={3}>{t('scanner.vendor')}</Text>
+                 <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                   <FormControl>
+                     <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.name')}</FormLabel>
                     <Input value={data.vendorName || ''} isReadOnly bg={dropzoneBg} />
                   </FormControl>
-                  <FormControl>
-                    <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">VAT Number</FormLabel>
-                    <Input value={data.vendorVatNumber || ''} isReadOnly bg={dropzoneBg} fontFamily="mono" />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Address</FormLabel>
+                   <FormControl>
+                     <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.vatNumber')}</FormLabel>
+                     <Input value={data.vendorVatNumber || ''} isReadOnly bg={dropzoneBg} fontFamily="mono" />
+                   </FormControl>
+                   <FormControl>
+                     <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.address')}</FormLabel>
                     <Input value={data.vendorAddress || ''} isReadOnly bg={dropzoneBg} />
                   </FormControl>
                 </SimpleGrid>
@@ -364,19 +364,19 @@ export default function DocumentScannerPage() {
               <Divider />
 
               {/* Customer Section */}
-              <Box>
-                <Text fontWeight="bold" color="gray.600" mb={3}>Customer (Buyer)</Text>
-                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-                  <FormControl>
-                    <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Name</FormLabel>
+               <Box>
+                 <Text fontWeight="bold" color="gray.600" mb={3}>{t('scanner.customer')}</Text>
+                 <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                   <FormControl>
+                     <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.name')}</FormLabel>
                     <Input value={data.customerName || ''} isReadOnly bg={dropzoneBg} />
                   </FormControl>
-                  <FormControl>
-                    <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">VAT Number</FormLabel>
-                    <Input value={data.customerVatNumber || ''} isReadOnly bg={dropzoneBg} fontFamily="mono" />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Address</FormLabel>
+                   <FormControl>
+                     <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.vatNumber')}</FormLabel>
+                     <Input value={data.customerVatNumber || ''} isReadOnly bg={dropzoneBg} fontFamily="mono" />
+                   </FormControl>
+                   <FormControl>
+                     <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.address')}</FormLabel>
                     <Input value={data.customerAddress || ''} isReadOnly bg={dropzoneBg} />
                   </FormControl>
                 </SimpleGrid>
@@ -385,21 +385,21 @@ export default function DocumentScannerPage() {
               <Divider />
 
               {/* Invoice Details */}
-              <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
-                <FormControl>
-                  <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Invoice Number</FormLabel>
-                  <Input value={data.invoiceId || ''} isReadOnly bg={dropzoneBg} fontFamily="mono" />
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Invoice Date</FormLabel>
-                  <Input value={data.invoiceDate || ''} isReadOnly bg={dropzoneBg} />
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">Due Date</FormLabel>
-                  <Input value={data.dueDate || ''} isReadOnly bg={dropzoneBg} />
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">VIES Status</FormLabel>
+               <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
+                 <FormControl>
+                   <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.invoiceNumber')}</FormLabel>
+                   <Input value={data.invoiceId || ''} isReadOnly bg={dropzoneBg} fontFamily="mono" />
+                 </FormControl>
+                 <FormControl>
+                   <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.invoiceDate')}</FormLabel>
+                   <Input value={data.invoiceDate || ''} isReadOnly bg={dropzoneBg} />
+                 </FormControl>
+                 <FormControl>
+                   <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.dueDate')}</FormLabel>
+                   <Input value={data.dueDate || ''} isReadOnly bg={dropzoneBg} />
+                 </FormControl>
+                 <FormControl>
+                   <FormLabel fontSize="xs" color="gray.500" textTransform="uppercase">{t('scanner.viesStatus')}</FormLabel>
                   <Badge
                     colorScheme={
                       data.validationStatus === 'VALID' ? 'green' :
@@ -423,51 +423,51 @@ export default function DocumentScannerPage() {
               <Divider />
 
               {/* Amounts */}
-              <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-                <Stat bg={dropzoneBg} p={4} borderRadius="xl">
-                  <StatLabel>Tax Base</StatLabel>
-                  <StatNumber>{formatCurrency(data.subtotal)}</StatNumber>
-                </Stat>
-                <Stat bg={dropzoneBg} p={4} borderRadius="xl">
-                  <StatLabel>VAT</StatLabel>
-                  <StatNumber>{formatCurrency(data.totalTax)}</StatNumber>
-                </Stat>
-                <Stat bg="blue.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="blue.200">
-                  <StatLabel color="blue.600">Total Amount</StatLabel>
-                  <StatNumber color="blue.700" fontSize="2xl">{formatCurrency(data.invoiceTotal)}</StatNumber>
-                </Stat>
-              </SimpleGrid>
+               <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                 <Stat bg={dropzoneBg} p={4} borderRadius="xl">
+                   <StatLabel>{t('scanner.taxBase')}</StatLabel>
+                   <StatNumber>{formatCurrency(data.subtotal)}</StatNumber>
+                 </Stat>
+                 <Stat bg={dropzoneBg} p={4} borderRadius="xl">
+                   <StatLabel>{t('scanner.vat')}</StatLabel>
+                   <StatNumber>{formatCurrency(data.totalTax)}</StatNumber>
+                 </Stat>
+                 <Stat bg="blue.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="blue.200">
+                   <StatLabel color="blue.600">{t('scanner.totalAmountLabel')}</StatLabel>
+                   <StatNumber color="blue.700" fontSize="2xl">{formatCurrency(data.invoiceTotal)}</StatNumber>
+                 </Stat>
+               </SimpleGrid>
 
               {/* Suggested Accounts */}
               {data.suggestedAccounts && (
                 <>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="bold" color="gray.600" mb={3}>Suggested Accounts</Text>
-                    <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-                      {data.suggestedAccounts.counterpartyAccount && (
-                        <Stat bg="purple.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="purple.200">
-                          <StatLabel color="purple.600">
-                            {data.direction === 'PURCHASE' ? 'Suppliers' : 'Customers'}
-                          </StatLabel>
+                   <Box>
+                     <Text fontWeight="bold" color="gray.600" mb={3}>{t('scanner.suggestedAccounts')}</Text>
+                     <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                       {data.suggestedAccounts.counterpartyAccount && (
+                         <Stat bg="purple.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="purple.200">
+                           <StatLabel color="purple.600">
+                             {data.direction === 'PURCHASE' ? t('scanner.suppliers') : t('scanner.customers')}
+                           </StatLabel>
                           <StatNumber fontSize="sm" color="purple.900">
                             {data.suggestedAccounts.counterpartyAccount.code} - {data.suggestedAccounts.counterpartyAccount.name}
                           </StatNumber>
                         </Stat>
                       )}
-                      {data.suggestedAccounts.vatAccount && (
-                        <Stat bg="orange.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="orange.200">
-                          <StatLabel color="orange.600">VAT Account</StatLabel>
+                       {data.suggestedAccounts.vatAccount && (
+                         <Stat bg="orange.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="orange.200">
+                           <StatLabel color="orange.600">{t('scanner.vatAccount')}</StatLabel>
                           <StatNumber fontSize="sm" color="orange.900">
                             {data.suggestedAccounts.vatAccount.code} - {data.suggestedAccounts.vatAccount.name}
                           </StatNumber>
                         </Stat>
                       )}
-                      {data.suggestedAccounts.expenseOrRevenueAccount && (
-                        <Stat bg="teal.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="teal.200">
-                          <StatLabel color="teal.600">
-                            {data.direction === 'PURCHASE' ? 'Expense' : 'Revenue'}
-                          </StatLabel>
+                       {data.suggestedAccounts.expenseOrRevenueAccount && (
+                         <Stat bg="teal.50" p={4} borderRadius="xl" borderWidth="1px" borderColor="teal.200">
+                           <StatLabel color="teal.600">
+                             {data.direction === 'PURCHASE' ? t('scanner.expense') : t('scanner.revenue')}
+                           </StatLabel>
                           <StatNumber fontSize="sm" color="teal.900">
                             {data.suggestedAccounts.expenseOrRevenueAccount.code} - {data.suggestedAccounts.expenseOrRevenueAccount.name}
                           </StatNumber>
@@ -479,12 +479,12 @@ export default function DocumentScannerPage() {
               )}
 
               {/* Success Message */}
-              {saveSuccess && (
-                <Alert status="success" borderRadius="lg">
-                  <AlertIcon />
-                  Invoice saved successfully!
-                </Alert>
-              )}
+               {saveSuccess && (
+                 <Alert status="success" borderRadius="lg">
+                   <AlertIcon />
+                   {t('scanner.invoiceSavedSuccessfully')}
+                 </Alert>
+               )}
 
               {/* Save Button */}
               <HStack justify="flex-end" pt={4} borderTopWidth="1px" borderColor={borderColor}>
@@ -493,10 +493,10 @@ export default function DocumentScannerPage() {
                   size="lg"
                   onClick={handleSave}
                   isLoading={saving}
-                  loadingText="Saving..."
+                  loadingText={t('scanner.saving')}
                   leftIcon={<Icon as={DocumentIcon} boxSize={5} />}
                 >
-                  Save for Processing
+                  {t('scanner.saveForProcessing')}
                 </Button>
               </HStack>
             </VStack>
@@ -514,9 +514,9 @@ export default function DocumentScannerPage() {
                   <Text fontSize="xl" color="white">☁️</Text>
                 </Flex>
                 <Box textAlign="left">
-                  <Heading size="md">Azure Document Intelligence Setup</Heading>
-                  <Text fontSize="sm" color="gray.500">Configuration instructions</Text>
-                </Box>
+                   <Heading size="md">{t('scanner.azureSetupTitle')}</Heading>
+                   <Text fontSize="sm" color="gray.500">{t('scanner.configurationInstructions')}</Text>
+                 </Box>
               </HStack>
               <AccordionIcon />
             </AccordionButton>
@@ -525,11 +525,11 @@ export default function DocumentScannerPage() {
                 <Alert status="info" borderRadius="lg">
                   <AlertIcon />
                   <Box>
-                    <AlertTitle>Where to enter the keys?</AlertTitle>
-                    <AlertDescription>
-                      Azure keys are entered in <strong>Companies → AI Settings</strong> when creating or editing a company.
-                    </AlertDescription>
-                  </Box>
+                     <AlertTitle>{t('scanner.whereToEnterKeys')}</AlertTitle>
+                     <AlertDescription>
+                       {t('scanner.whereToEnterKeysDesc')}
+                     </AlertDescription>
+                   </Box>
                 </Alert>
 
                 <List spacing={4}>
@@ -537,9 +537,9 @@ export default function DocumentScannerPage() {
                     <HStack align="start">
                       <Badge colorScheme="blue" borderRadius="full" px={3} py={1}>1</Badge>
                       <Box>
-                        <Text fontWeight="medium">Create Azure account</Text>
+                        <Text fontWeight="medium">{t('scanner.createAzureAccount')}</Text>
                         <Text fontSize="sm" color="gray.500">
-                          Go to <Link href="https://portal.azure.com" isExternal color="blue.500">portal.azure.com</Link> and create a free account.
+                          {t('scanner.createAzureAccountDesc')}
                         </Text>
                       </Box>
                     </HStack>
@@ -548,9 +548,9 @@ export default function DocumentScannerPage() {
                     <HStack align="start">
                       <Badge colorScheme="blue" borderRadius="full" px={3} py={1}>2</Badge>
                       <Box>
-                        <Text fontWeight="medium">Create Document Intelligence resource</Text>
+                        <Text fontWeight="medium">{t('scanner.createDocIntelligenceResource')}</Text>
                         <Text fontSize="sm" color="gray.500">
-                          In Azure portal: <Code>Create a resource</Code> → search "Document Intelligence" → <Code>Create</Code>
+                          {t('scanner.createDocIntelligenceResourceDesc')}
                         </Text>
                       </Box>
                     </HStack>
@@ -559,9 +559,9 @@ export default function DocumentScannerPage() {
                     <HStack align="start">
                       <Badge colorScheme="blue" borderRadius="full" px={3} py={1}>3</Badge>
                       <Box>
-                        <Text fontWeight="medium">Choose pricing plan</Text>
+                        <Text fontWeight="medium">{t('scanner.choosePricingPlan')}</Text>
                         <Text fontSize="sm" color="gray.500">
-                          <strong>Free (F0)</strong>: 500 pages/month free | <strong>Standard (S0)</strong>: $1.50 per 1000 pages
+                          {t('scanner.choosePricingPlanDesc')}
                         </Text>
                       </Box>
                     </HStack>
@@ -570,9 +570,9 @@ export default function DocumentScannerPage() {
                     <HStack align="start">
                       <Badge colorScheme="blue" borderRadius="full" px={3} py={1}>4</Badge>
                       <Box>
-                        <Text fontWeight="medium">Get the keys</Text>
+                        <Text fontWeight="medium">{t('scanner.getKeys')}</Text>
                         <Text fontSize="sm" color="gray.500">
-                          Go to <Code>Keys and Endpoint</Code> and copy the Endpoint and Key.
+                          {t('scanner.getKeysDesc')}
                         </Text>
                       </Box>
                     </HStack>
@@ -582,11 +582,11 @@ export default function DocumentScannerPage() {
                 <Alert status="warning" borderRadius="lg">
                   <AlertIcon />
                   <Box>
-                    <AlertTitle>Azure Limits</AlertTitle>
-                    <AlertDescription fontSize="sm">
-                      Max file size: 500 MB | Max pages: 2000 | Formats: PDF, JPEG, PNG, BMP, TIFF, HEIF
-                    </AlertDescription>
-                  </Box>
+                     <AlertTitle>{t('scanner.azureLimits')}</AlertTitle>
+                     <AlertDescription fontSize="sm">
+                       {t('scanner.azureLimitsDesc')}
+                     </AlertDescription>
+                   </Box>
                 </Alert>
               </VStack>
             </AccordionPanel>
