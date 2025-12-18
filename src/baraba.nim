@@ -18,7 +18,7 @@ proc parseQueryParams(queryString: string): Table[string, string] =
     elif parts.len == 1:
       result[decodeUrl(parts[0])] = ""
 
-import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log, scanned_invoice]
+import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log, scanned_invoice, system_settings, vat_return, bank_transaction, accounting_period]
 import services/auth
 import db/config
 import utils/json_utils
@@ -223,8 +223,74 @@ router mainRouter:
   # =====================
   # ACCOUNT ROUTES
   # =====================
-  # extend accountRoutes()
-  # Account routes are defined in separate file
+  get "/api/accounts":
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0")
+      var accounts: seq[Account]
+      if companyId != "0":
+        accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $(parseInt(companyId)))
+      else:
+        accounts = findAll(Account, db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
+
+  get "/api/accounts/company/@companyId":
+    withDb:
+      let companyId = parseInt(@"companyId")
+      var accounts = findWhere(Account, db, "company_id = $1 ORDER BY code", $companyId)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
+
+  get "/api/accounts/analytical/@companyId":
+    withDb:
+      let companyId = parseInt(@"companyId")
+      let accounts = findWhere(Account, db, "company_id = $1 AND is_analytical = true ORDER BY code", $companyId)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
+
+  get "/api/accounts/@id":
+    withDb:
+      let accountOpt = find(Account, parseInt(@"id"), db)
+      if accountOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Account not found"})
+        return
+      var account = accountOpt.get()
+      resp Http200, {"Content-Type": "application/json"}, $toJson(account)
+
+  post "/api/accounts":
+    withDb:
+      let body = parseJson(request.body)
+      var parentId = none(int64)
+      if body.hasKey("parentId") and body["parentId"].kind != JNull:
+        parentId = some(body["parentId"].getBiggestInt())
+      var account = newAccount(
+        code = body["code"].getStr(),
+        name = body["name"].getStr(),
+        account_type = body.getOrDefault("accountType").getStr("ASSET"),
+        company_id = body["companyId"].getBiggestInt(),
+        parent_id = parentId
+      )
+      save(account, db)
+      resp Http201, {"Content-Type": "application/json"}, $toJson(account)
+
+  put "/api/accounts/@id":
+    withDb:
+      let accountId = parseInt(@"id")
+      let body = parseJson(request.body)
+      var accountOpt = find(Account, accountId, db)
+      if accountOpt.isSome:
+        var account = accountOpt.get()
+        if body.hasKey("name"): account.name = body["name"].getStr()
+        if body.hasKey("account_type"): account.account_type = body.getOrDefault("accountType").getStr(account.account_type)
+        account.updated_at = now()
+
+        save(account, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(account)
+      else:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Сметката не е намерена"})
+
+  delete "/api/accounts/@id":
+    withDb:
+      let accountId = parseInt(@"id")
+      deleteById(Account, accountId, db)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true, "message": "Сметката е изтрита"})
 
   # =====================
   # COUNTERPART ROUTES
@@ -502,12 +568,335 @@ router mainRouter:
   # VAT RETURNS ROUTES
   # =====================
   get "/api/vat-returns":
-    let companyId = request.params.getOrDefault("companyId", "0").parseInt
-    if companyId == 0:
-      resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Missing companyId"})
-    else:
-      # Placeholder - returns empty array
-      resp Http200, {"Content-Type": "application/json"}, "[]"
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
+      if companyId == 0:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Missing companyId"})
+      else:
+        let returns = findWhere(VatReturn, db, "company_id = $1 ORDER BY period_year DESC, period_month DESC", $companyId)
+        resp Http200, {"Content-Type": "application/json"}, $toJsonArray(returns)
+
+  get "/api/vat-returns/@id":
+    withDb:
+      let id = @"id".parseInt
+      let vatReturnOpt = find(VatReturn, id, db)
+      if vatReturnOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "ДДС декларацията не е намерена"})
+        return
+      resp Http200, {"Content-Type": "application/json"}, $toJson(vatReturnOpt.get())
+
+  post "/api/vat-returns":
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        var vatReturn = newVatReturn(
+          company_id = body["companyId"].getBiggestInt(),
+          period_year = body["periodYear"].getInt(),
+          period_month = body["periodMonth"].getInt(),
+          status = body.getOrDefault("status").getStr("DRAFT"),
+          created_by_id = body.getOrDefault("createdById").getBiggestInt(1)
+        )
+        save(vatReturn, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(vatReturn)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  put "/api/vat-returns/@id":
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let body = parseJson(request.body)
+        let vatReturnOpt = find(VatReturn, id, db)
+        if vatReturnOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "ДДС декларацията не е намерена"})
+          return
+        var vatReturn = vatReturnOpt.get()
+        if body.hasKey("status"): vatReturn.status = body["status"].getStr()
+        if body.hasKey("notes"): vatReturn.notes = body["notes"].getStr()
+        if body.hasKey("pokupkiFile"): vatReturn.pokupki_file = body["pokupkiFile"].getStr()
+        if body.hasKey("prodajbiFile"): vatReturn.prodajbi_file = body["prodajbiFile"].getStr()
+        if body.hasKey("deklarFile"): vatReturn.deklar_file = body["deklarFile"].getStr()
+        vatReturn.updated_at = now()
+        save(vatReturn, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(vatReturn)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  delete "/api/vat-returns/@id":
+    withDb:
+      let id = @"id".parseInt
+      let vatReturnOpt = find(VatReturn, id, db)
+      if vatReturnOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "ДДС декларацията не е намерена"})
+        return
+      var vatReturn = vatReturnOpt.get()
+      if vatReturn.status != "DRAFT":
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Само чернови могат да бъдат изтривани"})
+        return
+      delete(vatReturn, db)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+
+  # =====================
+  # SYSTEM SETTINGS ROUTES
+  # =====================
+  get "/api/system-settings":
+    withDb:
+      let category = request.params.getOrDefault("category", "")
+      var settings: seq[SystemSettings]
+      if category != "":
+        settings = findWhere(SystemSettings, db, "category = $1 AND company_id IS NULL", category)
+      else:
+        settings = findWhere(SystemSettings, db, "company_id IS NULL")
+
+      # Return as key-value object
+      var settingsJson = newJObject()
+      for s in settings:
+        settingsJson[s.setting_key] = %s.setting_value
+      resp Http200, {"Content-Type": "application/json"}, $settingsJson
+
+  put "/api/system-settings":
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        let category = body.getOrDefault("category").getStr("GENERAL")
+
+        for key, value in body.pairs:
+          if key == "category": continue
+
+          let existing = findWhere(SystemSettings, db, "setting_key = $1 AND company_id IS NULL", key)
+          if existing.len > 0:
+            var setting = existing[0]
+            setting.setting_value = value.getStr()
+            setting.updated_at = now()
+            save(setting, db)
+          else:
+            var setting = newSystemSettings(
+              setting_key = key,
+              setting_value = value.getStr(),
+              category = category
+            )
+            save(setting, db)
+
+        resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  # =====================
+  # BANK TRANSACTION ROUTES
+  # =====================
+  get "/api/bank-transactions":
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
+      let bankProfileId = request.params.getOrDefault("bankProfileId", "0").parseInt
+      let status = request.params.getOrDefault("status", "")
+
+      var transactions: seq[BankTransaction]
+      if bankProfileId > 0:
+        if status != "":
+          transactions = findWhere(BankTransaction, db, "bank_profile_id = $1 AND status = $2 ORDER BY transaction_date DESC", $bankProfileId, status)
+        else:
+          transactions = findWhere(BankTransaction, db, "bank_profile_id = $1 ORDER BY transaction_date DESC", $bankProfileId)
+      elif companyId > 0:
+        if status != "":
+          transactions = findWhere(BankTransaction, db, "company_id = $1 AND status = $2 ORDER BY transaction_date DESC", $companyId, status)
+        else:
+          transactions = findWhere(BankTransaction, db, "company_id = $1 ORDER BY transaction_date DESC", $companyId)
+      else:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "companyId или bankProfileId е задължителен"})
+        return
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(transactions)
+
+  get "/api/bank-transactions/@id":
+    withDb:
+      let id = @"id".parseInt
+      let txOpt = find(BankTransaction, id, db)
+      if txOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Транзакцията не е намерена"})
+        return
+      resp Http200, {"Content-Type": "application/json"}, $toJson(txOpt.get())
+
+  post "/api/bank-transactions":
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        var tx = newBankTransaction(
+          bank_profile_id = body["bankProfileId"].getBiggestInt(),
+          company_id = body["companyId"].getBiggestInt(),
+          amount = body["amount"].getFloat(),
+          currency_code = body.getOrDefault("currencyCode").getStr("BGN"),
+          reference = body.getOrDefault("reference").getStr(""),
+          counterparty_name = body.getOrDefault("counterpartyName").getStr(""),
+          description = body.getOrDefault("description").getStr(""),
+          status = "NEW",
+          import_source = body.getOrDefault("importSource").getStr("MANUAL")
+        )
+        if body.hasKey("transactionDate"):
+          tx.transaction_date = parse(body["transactionDate"].getStr().split("T")[0], "yyyy-MM-dd")
+        if body.hasKey("valueDate"):
+          tx.value_date = parse(body["valueDate"].getStr().split("T")[0], "yyyy-MM-dd")
+        save(tx, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(tx)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  put "/api/bank-transactions/@id":
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let body = parseJson(request.body)
+        let txOpt = find(BankTransaction, id, db)
+        if txOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Транзакцията не е намерена"})
+          return
+        var tx = txOpt.get()
+        if body.hasKey("status"): tx.status = body["status"].getStr()
+        if body.hasKey("category"): tx.category = body["category"].getStr()
+        if body.hasKey("matchedCounterpartId"):
+          if body["matchedCounterpartId"].kind == JNull:
+            tx.matched_counterpart_id = none(int64)
+          else:
+            tx.matched_counterpart_id = some(body["matchedCounterpartId"].getBiggestInt())
+        if body.hasKey("matchedAccountId"):
+          if body["matchedAccountId"].kind == JNull:
+            tx.matched_account_id = none(int64)
+          else:
+            tx.matched_account_id = some(body["matchedAccountId"].getBiggestInt())
+        tx.updated_at = now()
+        save(tx, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(tx)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  delete "/api/bank-transactions/@id":
+    withDb:
+      let id = @"id".parseInt
+      let txOpt = find(BankTransaction, id, db)
+      if txOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Транзакцията не е намерена"})
+        return
+      var tx = txOpt.get()
+      if tx.status == "POSTED":
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Не може да изтриете осчетоводена транзакция"})
+        return
+      delete(tx, db)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
+
+  # =====================
+  # ACCOUNTING PERIOD ROUTES
+  # =====================
+  get "/api/accounting-periods":
+    withDb:
+      let companyId = request.params.getOrDefault("companyId", "0").parseInt
+      let year = request.params.getOrDefault("year", "0").parseInt
+      var periods: seq[AccountingPeriod]
+      if year > 0:
+        periods = findWhere(AccountingPeriod, db, "company_id = $1 AND period_year = $2 ORDER BY period_month", $companyId, $year)
+      else:
+        periods = findWhere(AccountingPeriod, db, "company_id = $1 ORDER BY period_year DESC, period_month DESC", $companyId)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(periods)
+
+  get "/api/accounting-periods/@id":
+    withDb:
+      let id = @"id".parseInt
+      let periodOpt = find(AccountingPeriod, id, db)
+      if periodOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Периодът не е намерен"})
+        return
+      resp Http200, {"Content-Type": "application/json"}, $toJson(periodOpt.get())
+
+  post "/api/accounting-periods":
+    withDb:
+      try:
+        let body = parseJson(request.body)
+        let year = body["periodYear"].getInt()
+        let month = body["periodMonth"].getInt()
+
+        # Calculate start and end dates
+        let startDate = parse($year & "-" & (if month < 10: "0" else: "") & $month & "-01", "yyyy-MM-dd")
+        var endDate: DateTime
+        if month == 12:
+          endDate = parse($year & "-12-31", "yyyy-MM-dd")
+        else:
+          endDate = parse($year & "-" & (if month + 1 < 10: "0" else: "") & $(month + 1) & "-01", "yyyy-MM-dd") - initDuration(days = 1)
+
+        var period = newAccountingPeriod(
+          company_id = body["companyId"].getBiggestInt(),
+          period_year = year,
+          period_month = month,
+          period_type = body.getOrDefault("periodType").getStr("MONTHLY"),
+          start_date = startDate,
+          end_date = endDate,
+          status = "OPEN"
+        )
+        save(period, db)
+        resp Http201, {"Content-Type": "application/json"}, $toJson(period)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  post "/api/accounting-periods/@id/close":
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let body = parseJson(request.body)
+        let periodOpt = find(AccountingPeriod, id, db)
+        if periodOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Периодът не е намерен"})
+          return
+        var period = periodOpt.get()
+        if period.status != "OPEN":
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Периодът вече е затворен"})
+          return
+
+        # Check balance
+        let balanceRows = db.getAllRows(sql"""
+          SELECT COALESCE(SUM(el.debit_amount), 0), COALESCE(SUM(el.credit_amount), 0)
+          FROM "EntryLine" el
+          JOIN "JournalEntry" je ON je.id = el.journal_entry_id
+          WHERE je.company_id = $1 AND je.is_posted = true
+            AND je.document_date >= $2::timestamp AND je.document_date <= $3::timestamp
+        """, period.company_id, period.start_date.format("yyyy-MM-dd"), period.end_date.format("yyyy-MM-dd"))
+
+        var totalDebit = 0.0
+        var totalCredit = 0.0
+        if balanceRows.len > 0:
+          totalDebit = parseFloat($balanceRows[0][0])
+          totalCredit = parseFloat($balanceRows[0][1])
+
+        period.total_debit = totalDebit
+        period.total_credit = totalCredit
+        period.is_balanced = abs(totalDebit - totalCredit) < 0.01
+        period.status = "CLOSED"
+        period.closed_at = some(now())
+        if body.hasKey("closedById"):
+          period.closed_by_id = some(body["closedById"].getBiggestInt())
+        period.updated_at = now()
+        save(period, db)
+
+        resp Http200, {"Content-Type": "application/json"}, $toJson(period)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+
+  post "/api/accounting-periods/@id/reopen":
+    withDb:
+      try:
+        let id = @"id".parseInt
+        let periodOpt = find(AccountingPeriod, id, db)
+        if periodOpt.isNone:
+          resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Периодът не е намерен"})
+          return
+        var period = periodOpt.get()
+        if period.status == "LOCKED":
+          resp Http400, {"Content-Type": "application/json"}, $(%*{"error": "Заключени периоди не могат да бъдат отваряни"})
+          return
+
+        period.status = "OPEN"
+        period.closed_at = none(DateTime)
+        period.closed_by_id = none(int64)
+        period.updated_at = now()
+        save(period, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(period)
+      except:
+        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
 
   # =====================
   # SCANNER ROUTES
@@ -1634,6 +2023,10 @@ proc ensureAllTables() =
   ensureTable(db, BankProfile)
   ensureTable(db, AuditLog)
   ensureTable(db, ScannedInvoice)
+  ensureTable(db, SystemSettings)
+  ensureTable(db, VatReturn)
+  ensureTable(db, BankTransaction)
+  ensureTable(db, AccountingPeriod)
   echo "Database schema ready"
 
 proc main() =

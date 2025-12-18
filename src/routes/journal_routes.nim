@@ -23,7 +23,7 @@ proc journalRoutes*(): auto =
       try:
         var entries: seq[JournalEntry]
         if companyId != "0":
-          entries = findWhere(JournalEntry, db, "company_id = $1 ORDER BY document_date DESC", companyId)
+          entries = findWhere(JournalEntry, db, "company_id = $1 ORDER BY document_date DESC", $(parseInt(companyId)))
         else:
           entries = findAll(JournalEntry, db)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(entries)

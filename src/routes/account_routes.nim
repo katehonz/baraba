@@ -26,8 +26,8 @@ proc accountRoutes*(): auto =
 
     get "/api/accounts/analytical/@companyId":
       withDb:
-        let companyId = @"companyId"
-        let accounts = findWhere(Account, db, "company_id = $1 AND is_analytical = true ORDER BY code", companyId)
+        let companyId = parseInt(@"companyId")
+        let accounts = findWhere(Account, db, "company_id = $1 AND is_analytical = true ORDER BY code", $companyId)
         resp Http200, {"Content-Type": "application/json"}, $toJsonArray(accounts)
 
     get "/api/accounts/@id":
