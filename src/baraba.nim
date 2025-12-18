@@ -217,8 +217,66 @@ router mainRouter:
   # =====================
   # COMPANY ROUTES
   # =====================
-  # extend companyRoutes()
-  # Company routes are defined in separate file
+  get "/api/companies":
+    withDb:
+      let companies = findAll(Company, db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(companies)
+
+  get "/api/companies/@id":
+    withDb:
+      let companyId = parseInt(@"id")
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "Company not found"}"""
+        return
+      let company = companyOpt.get()
+      resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+
+  post "/api/companies":
+    withDb:
+      let body = parseJson(request.body)
+      var baseCurrencyId: int64 = 0
+      let currencies = findWhere(Currency, db, "code = $1", "BGN")
+      if currencies.len > 0:
+        baseCurrencyId = currencies[0].id
+      var company = newCompany(
+        name = body["name"].getStr(),
+        eik = body["eik"].getStr(),
+        vat_number = body.getOrDefault("vatNumber").getStr(""),
+        address = body.getOrDefault("address").getStr(""),
+        city = body.getOrDefault("city").getStr(""),
+        base_currency_id = baseCurrencyId
+      )
+      save(company, db)
+      resp Http201, {"Content-Type": "application/json"}, $toJson(company)
+
+  put "/api/companies/@id":
+    withDb:
+      let companyId = parseInt(@"id")
+      let body = parseJson(request.body)
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "Фирмата не е намерена"}"""
+        return
+      var company = companyOpt.get()
+      if body.hasKey("name"): company.name = body["name"].getStr()
+      if body.hasKey("vatNumber"): company.vat_number = body["vatNumber"].getStr()
+      if body.hasKey("address"): company.address = body["address"].getStr()
+      if body.hasKey("city"): company.city = body["city"].getStr()
+      company.updated_at = now()
+      save(company, db)
+      resp Http200, {"Content-Type": "application/json"}, $toJson(company)
+
+  delete "/api/companies/@id":
+    withDb:
+      let companyId = parseInt(@"id")
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "Фирмата не е намерена"}"""
+        return
+      var company = companyOpt.get()
+      delete(company, db)
+      resp Http200, {"Content-Type": "application/json"}, $(%*{"success": true})
 
   # =====================
   # ACCOUNT ROUTES
@@ -301,8 +359,43 @@ router mainRouter:
   # =====================
   # CURRENCY ROUTES
   # =====================
-  # extend currencyRoutes()
-  # Currency routes are defined in separate file
+  get "/api/currencies":
+    withDb:
+      let currencies = findAll(Currency, db)
+      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(currencies)
+
+  post "/api/currencies":
+    withDb:
+      let body = parseJson(request.body)
+      var currency = newCurrency(
+        code = body["code"].getStr(),
+        name = body["name"].getStr(),
+        name_bg = body.getOrDefault("nameBg").getStr(""),
+        symbol = body.getOrDefault("symbol").getStr(""),
+        decimal_places = body.getOrDefault("decimalPlaces").getInt(2),
+        is_base_currency = body.getOrDefault("isBaseCurrency").getBool(false),
+        is_active = body.getOrDefault("isActive").getBool(true)
+      )
+      save(currency, db)
+      resp Http201, {"Content-Type": "application/json"}, $toJson(currency)
+
+  put "/api/currencies/@id":
+    withDb:
+      let id = parseInt(@"id")
+      let body = parseJson(request.body)
+      var currencyOpt = find(Currency, id, db)
+      if currencyOpt.isSome:
+        var currency = currencyOpt.get()
+        if body.hasKey("isActive"):
+          currency.is_active = body["isActive"].getBool()
+        if body.hasKey("code"):
+          currency.code = body["code"].getStr()
+        if body.hasKey("name"):
+          currency.name = body["name"].getStr()
+        save(currency, db)
+        resp Http200, {"Content-Type": "application/json"}, $toJson(currency)
+      else:
+        resp Http404, {"Content-Type": "application/json"}, """{"error": "Currency not found"}"""
 
   # =====================
   # AUDIT LOG ROUTES
@@ -360,7 +453,7 @@ router mainRouter:
           eurCurrency = eurCurrencies[0]
         else:
           # Create EUR if not exists
-          eurCurrency = newCurrency(code = "EUR", name = "Euro", symbol = "€", isBaseCurrency = true, isActive = true)
+          eurCurrency = newCurrency(code = "EUR", name = "Euro", symbol = "€", is_base_currency = true, is_active = true)
           save(eurCurrency, db)
 
         var ratesAdded = 0
@@ -387,7 +480,7 @@ router mainRouter:
                       if currs.len > 0:
                         curr = currs[0]
                       else:
-                        curr = newCurrency(code = currCode, name = currCode, isActive = false)
+                        curr = newCurrency(code = currCode, name = currCode, is_active = false)
                         save(curr, db)
 
                       # Create new rate (allow duplicates, user can manage them)

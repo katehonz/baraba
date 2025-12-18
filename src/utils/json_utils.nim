@@ -1,25 +1,39 @@
-import std/[json, times, options]
+import std/[json, times, options, strutils]
+
+proc snakeToCamel(s: string): string =
+  ## Convert snake_case to camelCase
+  result = ""
+  var capitalizeNext = false
+  for c in s:
+    if c == '_':
+      capitalizeNext = true
+    elif capitalizeNext:
+      result.add(c.toUpperAscii)
+      capitalizeNext = false
+    else:
+      result.add(c)
 
 proc toJson*[T](obj: T): JsonNode =
   result = %*{}
   for name, value in fieldPairs(obj):
+    let jsonName = snakeToCamel(name)
     when value is Option:
       if value.isSome:
         when value.get is DateTime:
-          result[name] = %($value.get)
+          result[jsonName] = %($value.get)
         else:
-          result[name] = %value.get
+          result[jsonName] = %value.get
       else:
-        result[name] = newJNull()
+        result[jsonName] = newJNull()
     elif value is DateTime:
-      result[name] = %($value)
+      result[jsonName] = %($value)
     elif value is ref:
       if value != nil:
-        result[name] = toJson(value)
+        result[jsonName] = toJson(value)
       else:
-        result[name] = newJNull()
+        result[jsonName] = newJNull()
     else:
-      result[name] = %value
+      result[jsonName] = %value
 
 proc toJsonArray*[T](items: seq[T]): JsonNode =
   result = newJArray()
