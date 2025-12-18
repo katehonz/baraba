@@ -27,6 +27,8 @@ export interface AuthResponse {
 }
 
 // Company types
+export type RepresentativeType = 'MANAGER' | 'AUTHORIZED_PERSON';
+
 export interface Company {
   id: number;
   name: string;
@@ -39,6 +41,11 @@ export interface Company {
   email: string;
   contactPerson: string;
   managerName: string;
+  managerEgn: string;
+  authorizedPerson: string;
+  authorizedPersonEgn: string;
+  napOffice: string;
+  representativeType: RepresentativeType;
   isActive: boolean;
   baseCurrencyId: number;
   createdAt: string;
@@ -54,6 +61,12 @@ export interface CreateCompanyInput {
   country?: string;
   phone?: string;
   email?: string;
+  managerName?: string;
+  managerEgn?: string;
+  authorizedPerson?: string;
+  authorizedPersonEgn?: string;
+  napOffice?: string;
+  representativeType?: RepresentativeType;
 }
 
 // Account types

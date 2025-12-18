@@ -102,7 +102,19 @@
     "city": "Град",
     "selected": "Избрана",
     "eik_prefix": "ЕИК: ",
-    "vat_prefix": "ДДС: "
+    "vat_prefix": "ДДС: ",
+    "basic_info": "Основна информация",
+    "nap_office": "Офис на НАП",
+    "vat_representative": "Представител за ДДС декларация",
+    "representative_type": "Кой подава декларацията",
+    "manager": "Управител",
+    "authorized_person": "Упълномощено лице",
+    "manager_info": "Управител на фирмата",
+    "manager_name": "Име на управител",
+    "manager_egn": "ЕГН на управител",
+    "authorized_person_info": "Упълномощено лице (ако е различно от управител)",
+    "authorized_person_name": "Име на упълномощено лице",
+    "authorized_person_egn": "ЕГН на упълномощено лице"
   },
   "accounts": {
     "title": "Сметкоплан",

@@ -102,7 +102,19 @@
     "city": "City",
     "selected": "Selected",
     "eik_prefix": "UIC: ",
-    "vat_prefix": "VAT: "
+    "vat_prefix": "VAT: ",
+    "basic_info": "Basic Information",
+    "nap_office": "Tax Office (NAP)",
+    "vat_representative": "VAT Declaration Representative",
+    "representative_type": "Who submits the declaration",
+    "manager": "Manager",
+    "authorized_person": "Authorized Person",
+    "manager_info": "Company Manager",
+    "manager_name": "Manager Name",
+    "manager_egn": "Manager EGN",
+    "authorized_person_info": "Authorized Person (if different from manager)",
+    "authorized_person_name": "Authorized Person Name",
+    "authorized_person_egn": "Authorized Person EGN"
   },
   "accounts": {
     "title": "Chart of Accounts",

@@ -3,6 +3,10 @@ import orm/orm
 import currency
 
 type
+  RepresentativeType* = enum
+    rtManager = "MANAGER"
+    rtAuthorizedPerson = "AUTHORIZED_PERSON"
+
   Company* = object of Model
     name*: string
     eik*: string
@@ -18,6 +22,7 @@ type
     manager_egn*: string
     authorized_person_egn*: string
     nap_office*: string
+    representative_type*: string  # "MANAGER" or "AUTHORIZED_PERSON"
     is_active*: bool
     enable_vies_validation*: bool
     enable_ai_mapping*: bool
@@ -76,6 +81,7 @@ proc newCompany*(
     manager_egn: "",
     authorized_person_egn: "",
     nap_office: "",
+    representative_type: "MANAGER",
     is_active: is_active,
     enable_vies_validation: false,
     enable_ai_mapping: false,

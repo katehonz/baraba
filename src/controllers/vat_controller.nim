@@ -302,9 +302,14 @@ proc generateVatDeclaration*(self: var VatManager, db: DbConn): string =
   let companyVat = formatField(getVatNumber(self.company), 15)
   let companyName = formatField(self.company.name, 50)
 
-  # Manager info
-  let managerEgn = formatField(self.company.manager_egn, 10)
-  let managerName = formatField(self.company.manager_name, 50)
+  # Representative info - use manager or authorized person based on representative_type
+  let (representativeEgn, representativeName) =
+    if self.company.representative_type == "AUTHORIZED_PERSON":
+      (formatField(self.company.authorized_person_egn, 10),
+       formatField(self.company.authorized_person, 50))
+    else:
+      (formatField(self.company.manager_egn, 10),
+       formatField(self.company.manager_name, 50))
 
   # Count entries
   let purchaseCount = self.purchase_ledger.len
@@ -323,8 +328,8 @@ proc generateVatDeclaration*(self: var VatManager, db: DbConn): string =
 
   var line = companyVat
   line &= formatField(companyName, 50)
-  line &= managerEgn
-  line &= formatField(managerName, 50)
+  line &= representativeEgn
+  line &= representativeName
   line &= formatField($salesCount, 15, true)
   line &= formatField($purchaseCount, 15, true)
   # Sales totals

@@ -715,23 +715,23 @@ macro populateObject(T: typedesc, obj: var typed, row: typed): untyped =
       elif fieldTypeStr == "DateTime":
         quote do: parsePgTimestamp($`rowValue`)
       elif fieldTypeStr.startsWith("Option["):
-        # Handle Option types - check if value is empty
+        # Handle Option types - check if value is empty or NULL
         let innerType = fieldTypeStr[7..^2]  # Extract inner type from "Option[X]"
         if innerType == "DateTime":
           quote do:
-            if $`rowValue` == "" or $`rowValue` == "null":
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
               none(DateTime)
             else:
               some(parsePgTimestamp($`rowValue`))
         elif innerType == "int64":
           quote do:
-            if $`rowValue` == "" or $`rowValue` == "null":
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
               none(int64)
             else:
               some(parseBiggestInt($`rowValue`))
         else:
           quote do:
-            if $`rowValue` == "" or $`rowValue` == "null":
+            if $`rowValue` == "" or $`rowValue` == "null" or $`rowValue` == "NULL":
               none(typeof(`obj`.`fieldName`).T)
             else:
               some($`rowValue`)
