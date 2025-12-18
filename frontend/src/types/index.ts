@@ -112,6 +112,7 @@ export interface Counterpart {
   eik: string;
   vatNumber: string;
   address: string;
+  longAddress: string;
   city: string;
   country: string;
   phone: string;
@@ -132,10 +133,13 @@ export interface CreateCounterpartInput {
   eik?: string;
   vatNumber?: string;
   address?: string;
+  longAddress?: string;
   city?: string;
+  country?: string;
   counterpartType?: CounterpartType;
   isCustomer?: boolean;
   isSupplier?: boolean;
+  isVatRegistered?: boolean;
   companyId?: number;
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Button,
   Heading,
@@ -35,11 +35,14 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
+  InputGroup,
+  InputRightElement,
+  Textarea,
 } from '@chakra-ui/react';
-import { EditIcon, DeleteIcon } from '@chakra-ui/icons';
+import { EditIcon, DeleteIcon, SearchIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useRef } from 'react';
 import { counterpartsApi } from '../../api/counterparts';
+import { viesApi } from '../../api/vies';
 import { useCompany } from '../../contexts/CompanyContext';
 import type { Counterpart } from '../../types';
 
@@ -48,12 +51,16 @@ export default function CounterpartsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [validatingVies, setValidatingVies] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     eik: '',
     vatNumber: '',
+    longAddress: '',
+    country: 'BG',
     isCustomer: true,
-    isSupplier: false
+    isSupplier: false,
+    isVatRegistered: false
   });
   const { currentCompany } = useCompany();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -99,7 +106,7 @@ export default function CounterpartsPage() {
       handleCloseModal();
       loadCounterparts();
     } catch (error: any) {
-      const errorMsg = error?.response?.data?.error || 'Грешка при запазване';
+      const errorMsg = error?.response?.data?.error || t('counterparts.save_error');
       toast({ title: errorMsg, status: 'error', duration: 3000 });
     }
   };
@@ -110,10 +117,52 @@ export default function CounterpartsPage() {
       name: cp.name,
       eik: cp.eik || '',
       vatNumber: cp.vatNumber || '',
+      longAddress: cp.longAddress || '',
+      country: cp.country || 'BG',
       isCustomer: cp.isCustomer,
-      isSupplier: cp.isSupplier
+      isSupplier: cp.isSupplier,
+      isVatRegistered: cp.isVatRegistered
     });
     onOpen();
+  };
+
+  const handleViesValidation = async () => {
+    if (!formData.vatNumber || formData.vatNumber.length < 3) {
+      toast({ title: t('counterparts.vies_enter_vat'), status: 'warning', duration: 2000 });
+      return;
+    }
+
+    setValidatingVies(true);
+    try {
+      const result = await viesApi.validateVat(formData.vatNumber);
+
+      if (result.valid) {
+        const countryCode = formData.vatNumber.substring(0, 2).toUpperCase();
+
+        // За български фирми - ЕИК е ДДС номера без "BG"
+        // За чужди фирми - няма ЕИК
+        const eik = countryCode === 'BG'
+          ? formData.vatNumber.substring(2)
+          : '';
+
+        setFormData(prev => ({
+          ...prev,
+          name: result.name || prev.name,
+          longAddress: result.longAddress || prev.longAddress,
+          country: countryCode,
+          eik: eik,
+          isVatRegistered: true
+        }));
+
+        toast({ title: t('counterparts.vies_valid'), status: 'success', duration: 2000 });
+      } else {
+        toast({ title: t('counterparts.vies_invalid'), status: 'error', duration: 3000 });
+      }
+    } catch (error) {
+      toast({ title: t('counterparts.vies_error'), status: 'error', duration: 3000 });
+    } finally {
+      setValidatingVies(false);
+    }
   };
 
   const handleDeleteClick = (id: number) => {
@@ -130,14 +179,23 @@ export default function CounterpartsPage() {
       setDeleteId(null);
       loadCounterparts();
     } catch (error) {
-      toast({ title: 'Грешка при изтриване', status: 'error', duration: 3000 });
+      toast({ title: t('counterparts.delete_error'), status: 'error', duration: 3000 });
     }
   };
 
   const handleCloseModal = () => {
     onClose();
     setEditingId(null);
-    setFormData({ name: '', eik: '', vatNumber: '', isCustomer: true, isSupplier: false });
+    setFormData({
+      name: '',
+      eik: '',
+      vatNumber: '',
+      longAddress: '',
+      country: 'BG',
+      isCustomer: true,
+      isSupplier: false,
+      isVatRegistered: false
+    });
   };
 
   if (!currentCompany) {
@@ -167,9 +225,31 @@ export default function CounterpartsPage() {
         <ModalOverlay />
         <ModalContent>
           <form onSubmit={handleSubmit}>
-            <ModalHeader>{editingId ? 'Редактиране на контрагент' : t('counterparts.create')}</ModalHeader>
+            <ModalHeader>{editingId ? t('counterparts.edit') : t('counterparts.create')}</ModalHeader>
             <ModalBody>
               <VStack spacing={4}>
+                <FormControl>
+                  <FormLabel>{t('counterparts.vat_number')}</FormLabel>
+                  <InputGroup>
+                    <Input
+                      value={formData.vatNumber}
+                      onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value.toUpperCase() })}
+                      placeholder="BG123456789"
+                    />
+                    <InputRightElement width="auto" pr={1}>
+                      <Button
+                        size="sm"
+                        colorScheme="blue"
+                        leftIcon={<SearchIcon />}
+                        onClick={handleViesValidation}
+                        isLoading={validatingVies}
+                        loadingText="VIES..."
+                      >
+                        VIES
+                      </Button>
+                    </InputRightElement>
+                  </InputGroup>
+                </FormControl>
                 <FormControl isRequired>
                   <FormLabel>{t('counterparts.name')}</FormLabel>
                   <Input
@@ -182,15 +262,36 @@ export default function CounterpartsPage() {
                   <Input
                     value={formData.eik}
                     onChange={(e) => setFormData({ ...formData, eik: e.target.value })}
+                    placeholder={t('counterparts.eik_auto_fill')}
+                    isReadOnly={formData.country !== 'BG'}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>{t('counterparts.vat_number')}</FormLabel>
-                  <Input
-                    value={formData.vatNumber}
-                    onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
+                  <FormLabel>{t('counterparts.long_address')}</FormLabel>
+                  <Textarea
+                    value={formData.longAddress}
+                    onChange={(e) => setFormData({ ...formData, longAddress: e.target.value })}
+                    rows={2}
+                    resize="vertical"
                   />
                 </FormControl>
+                <HStack spacing={6} w="full">
+                  <FormControl w="auto">
+                    <FormLabel>{t('counterparts.country')}</FormLabel>
+                    <Input
+                      value={formData.country}
+                      onChange={(e) => setFormData({ ...formData, country: e.target.value.toUpperCase() })}
+                      maxW="80px"
+                      maxLength={2}
+                    />
+                  </FormControl>
+                  <Checkbox
+                    isChecked={formData.isVatRegistered}
+                    onChange={(e) => setFormData({ ...formData, isVatRegistered: e.target.checked })}
+                  >
+                    {t('counterparts.vat_registered')}
+                  </Checkbox>
+                </HStack>
                 <HStack spacing={6} w="full">
                   <Checkbox
                     isChecked={formData.isCustomer}
@@ -209,7 +310,7 @@ export default function CounterpartsPage() {
             </ModalBody>
             <ModalFooter>
               <Button variant="ghost" mr={3} onClick={handleCloseModal}>{t('counterparts.cancel')}</Button>
-              <Button colorScheme="brand" type="submit">{editingId ? 'Запази' : t('common.create')}</Button>
+              <Button colorScheme="brand" type="submit">{editingId ? t('counterparts.save') : t('common.create')}</Button>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -220,15 +321,17 @@ export default function CounterpartsPage() {
           <Thead>
             <Tr>
               <Th>{t('counterparts.name')}</Th>
+              <Th>{t('counterparts.vat_number')}</Th>
               <Th>{t('counterparts.eik')}</Th>
+              <Th>{t('counterparts.country')}</Th>
               <Th>{t('counterparts.type')}</Th>
-              <Th width="100px">Действия</Th>
+              <Th width="100px">{t('counterparts.actions')}</Th>
             </Tr>
           </Thead>
           <Tbody>
             {counterparts.length === 0 ? (
               <Tr>
-                <Td colSpan={4}>
+                <Td colSpan={6}>
                   <Text color="gray.500" textAlign="center">{t('counterparts.no_counterparts')}</Text>
                 </Td>
               </Tr>
@@ -236,11 +339,14 @@ export default function CounterpartsPage() {
               counterparts.map((cp) => (
                 <Tr key={cp.id}>
                   <Td fontWeight="bold">{cp.name}</Td>
-                  <Td>{cp.eik}</Td>
+                  <Td>{cp.vatNumber}</Td>
+                  <Td>{cp.eik || '-'}</Td>
+                  <Td>{cp.country}</Td>
                   <Td>
                     <HStack spacing={2}>
                       {cp.isCustomer && <Badge colorScheme="blue">{t('counterparts.client')}</Badge>}
                       {cp.isSupplier && <Badge colorScheme="purple">{t('counterparts.supplier')}</Badge>}
+                      {cp.isVatRegistered && <Badge colorScheme="green">ДДС</Badge>}
                     </HStack>
                   </Td>
                   <Td>
@@ -277,17 +383,17 @@ export default function CounterpartsPage() {
         <AlertDialogOverlay>
           <AlertDialogContent>
             <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Изтриване на контрагент
+              {t('counterparts.delete_title')}
             </AlertDialogHeader>
             <AlertDialogBody>
-              Сигурни ли сте? Това действие не може да бъде отменено.
+              {t('counterparts.delete_confirm')}
             </AlertDialogBody>
             <AlertDialogFooter>
               <Button ref={cancelRef} onClick={onDeleteClose}>
-                Отказ
+                {t('counterparts.cancel')}
               </Button>
               <Button colorScheme="red" onClick={handleDelete} ml={3}>
-                Изтрий
+                {t('counterparts.delete')}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

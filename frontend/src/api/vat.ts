@@ -59,8 +59,8 @@ export const vatApi = {
     }
 
     return {
-      files: files as VatFiles,
-      rawFiles: rawFiles as VatFilesRaw
+      files: files as unknown as VatFiles,
+      rawFiles: rawFiles as unknown as VatFilesRaw
     };
   },
 };

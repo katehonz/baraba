@@ -187,12 +187,12 @@ export default function SettingsPage() {
     setGeneratingVat(true);
     try {
       const period = vatPeriod.replace('-', '');
-      const files = await vatApi.generate(companyId, period);
+      const result = await vatApi.generate(companyId, period);
 
       // Create a link and click it to download each file
-      for (const fileName in files) {
-        const content = files[fileName];
-        const blob = new Blob([content], { type: 'text/plain' });
+      for (const fileName of Object.keys(result.rawFiles) as Array<keyof typeof result.rawFiles>) {
+        const content = result.rawFiles[fileName];
+        const blob = new Blob([content as BlobPart], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = fileName;

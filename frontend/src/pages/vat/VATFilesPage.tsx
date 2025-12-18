@@ -97,7 +97,7 @@ export default function VATFilesPage() {
 
   const downloadFile = (filename: string, bytes: Uint8Array) => {
     // Download raw Windows-1251 bytes
-    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename;
