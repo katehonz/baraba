@@ -34,6 +34,7 @@ import {
   IconButton,
 } from '@chakra-ui/react';
 import { settingsApi, type SmtpSettings, type SaltEdgeSettings } from '../../api/settings';
+import { vatApi } from '../../api/vat';
 import type { DefaultAccounts } from '../../api/settings';
 import { accountsApi } from '../../api/accounts';
 import { currenciesApi } from '../../api/currencies';
@@ -63,6 +64,10 @@ export default function SettingsPage() {
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccounts>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // VAT state
+  const [vatPeriod, setVatPeriod] = useState('');
+  const [generatingVat, setGeneratingVat] = useState(false);
 
   // SMTP state
   const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>({
@@ -97,6 +102,13 @@ export default function SettingsPage() {
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
   useEffect(() => {
+    // Set default VAT period to last month
+    const today = new Date();
+    today.setMonth(today.getMonth() - 1);
+    const year = today.getFullYear();
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    setVatPeriod(`${year}-${month}`);
+
     currenciesApi.getAll().then(setCurrencies);
     loadSystemSettings();
     if (companyId) {
@@ -170,6 +182,33 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGenerateVat = async () => {
+    if (!companyId || !vatPeriod) return;
+    setGeneratingVat(true);
+    try {
+      const period = vatPeriod.replace('-', '');
+      const files = await vatApi.generate(companyId, period);
+
+      // Create a link and click it to download each file
+      for (const fileName in files) {
+        const content = files[fileName];
+        const blob = new Blob([content], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      toast({ title: 'VAT файловете са генерирани', status: 'success' });
+    } catch (error) {
+      toast({ title: 'Грешка при генериране на VAT файлове', status: 'error' });
+    } finally {
+      setGeneratingVat(false);
+    }
+  };
+
   const handleSaveSmtpSettings = async () => {
     setSavingSmtp(true);
     try {
@@ -227,6 +266,7 @@ export default function SettingsPage() {
     { id: 'automation', label: 'Автоматизации', icon: '🤖' },
     { id: 'smtp', label: 'SMTP / Email', icon: '📧' },
     { id: 'integrations', label: 'Интеграции', icon: '🔗' },
+    { id: 'vat', label: 'VAT / ДДС', icon: '🧾' },
     { id: 'users', label: 'Потребители', icon: '👥' },
   ];
 
@@ -777,6 +817,48 @@ export default function SettingsPage() {
                 </CardBody>
               </Card>
             </VStack>
+          )}
+
+          {activeTab === 'vat' && (
+          <Card bg={cardBg}>
+            <CardHeader>
+              <Heading size="md">ДДС Декларации</Heading>
+              <Text fontSize="sm" color="gray.500">
+                Генериране на файлове за дневниците за покупки и продажби, и ДДС декларация
+              </Text>
+            </CardHeader>
+            <CardBody pt={0}>
+              {!companyId ? (
+                <Alert status="warning" borderRadius="md">
+                  <AlertIcon />
+                  Моля, изберете компания от менюто горе.
+                </Alert>
+              ) : (
+                <VStack align="stretch" spacing={4}>
+                  <FormControl>
+                    <FormLabel>Период (месец)</FormLabel>
+                    <Input
+                      type="month"
+                      value={vatPeriod}
+                      onChange={(e) => setVatPeriod(e.target.value)}
+                    />
+                    <FormHelperText>Изберете месец и година за генериране</FormHelperText>
+                  </FormControl>
+
+                  <Flex justify="flex-end" pt={4}>
+                    <Button
+                      colorScheme="blue"
+                      onClick={handleGenerateVat}
+                      isLoading={generatingVat}
+                      disabled={!vatPeriod}
+                    >
+                      Генерирай файлове
+                    </Button>
+                  </Flex>
+                </VStack>
+              )}
+            </CardBody>
+          </Card>
           )}
 
           {/* Users Tab */}

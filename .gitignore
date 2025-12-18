@@ -40,3 +40,6 @@ old/
 old-nim/
 BLOG/
 baraba
+
+# VAT sample files (may contain personal data)
+VAT/

@@ -86,6 +86,7 @@ export default function Layout() {
             <NavLink to="/journal">Дневник</NavLink>
             <NavLink to="/vat/entry">ДДС Операция</NavLink>
             <NavLink to="/vat/returns">ДДС Дневници</NavLink>
+            <NavLink to="/vat/files">ДДС за НАП</NavLink>
             <NavLink to="/fixed-assets">ДМА</NavLink>
             <NavLink to="/banks">Банки</NavLink>
             <NavLink to="/scanner">AI Скенер</NavLink>

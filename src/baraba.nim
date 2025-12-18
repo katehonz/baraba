@@ -1,7 +1,7 @@
 ## Baraba - Счетоводна програма
 ## REST API built with Jester + Nim
 
-import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient, os, uri, tables]
+import std/[json, strutils, options, times, math, xmlparser, xmltree, httpclient, os, uri, tables, base64]
 import jester
 import asynchttpserver
 import orm/orm
@@ -34,6 +34,7 @@ import routes/user_routes
 import routes/user_group_routes
 import routes/fixed_asset_category_routes
 import routes/vies_routes
+import controllers/vat_controller
 
 var graphqlCtx {.threadvar.}: GraphqlRef
 var graphqlInitialized {.threadvar.}: bool
@@ -83,6 +84,7 @@ router mainRouter:
   options "/api/exchange-rates/fetch-ecb": resp Http200, corsHeaders, ""
   options "/api/vat-rates": resp Http200, corsHeaders, ""
   options "/api/vat-rates/@id": resp Http200, corsHeaders, ""
+  options "/api/vat/generate/@period": resp Http200, corsHeaders, ""
   options "/api/users": resp Http200, corsHeaders, ""
   options "/api/users/@id": resp Http200, corsHeaders, ""
   options "/api/users/@id/reset-password": resp Http200, corsHeaders, ""
@@ -130,6 +132,33 @@ router mainRouter:
     resp Http200, jsonCors, $(%*{"status": "ok"})
 
   # =====================
+  # VAT ROUTES
+  # =====================
+  post "/api/vat/generate/@period":
+    let period = @"period"
+    let body = parseJson(request.body)
+    let companyId = body["companyId"].getInt()
+
+    let db = getDbConn()
+    try:
+      let companyOpt = find(Company, companyId, db)
+      if companyOpt.isNone:
+        resp Http404, jsonCors, $(%*{"error": "Фирмата не е намерена"})
+        return
+      let company = companyOpt.get()
+
+      let (purchase, sales, deklar) = generateVatFiles(company, period)
+
+      let response = %*{
+        "POKUPKI.TXT": encode(purchase),
+        "PRODAGBI.TXT": encode(sales),
+        "DEKLAR.TXT": encode(deklar)
+      }
+      resp Http200, jsonCors, $response
+    finally:
+      releaseDbConn(db)
+
+  # =====================
   # SYSTEM SETTINGS
   # =====================
   get "/api/system-settings":
@@ -143,6 +172,7 @@ router mainRouter:
       "smtpUseSsl": false,
       "smtpEnabled": true
     })
+
 
   put "/api/system-settings/smtp":
     let body = parseJson(request.body)
