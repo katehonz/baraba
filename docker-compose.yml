@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: baraba_postgres
+    environment:
+      POSTGRES_DB: jesterac
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pas+123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - baraba_network
+
+  # Scanner Service (Port 5001)
+  scanner_service:
+    build:
+      context: ./scanner_service
+      dockerfile: Dockerfile
+    container_name: baraba_scanner
+    ports:
+      - "5001:5001"
+    depends_on:
+      - postgres
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=jesterac
+      - DB_USER=postgres
+      - DB_PASSWORD=pas+123
+    networks:
+      - baraba_network
+
+  # Identity Service (Port 5002)
+  identity_service:
+    build:
+      context: ./identity_service
+      dockerfile: Dockerfile
+    container_name: baraba_identity
+    ports:
+      - "5002:5002"
+    depends_on:
+      - postgres
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=jesterac
+      - DB_USER=postgres
+      - DB_PASSWORD=pas+123
+    networks:
+      - baraba_network
+
+  # VIES Service (Port 5003)
+  vies_service:
+    build:
+      context: ./vies_service
+      dockerfile: Dockerfile
+    container_name: baraba_vies
+    ports:
+      - "5003:5003"
+    networks:
+      - baraba_network
+
+  # VAT Service (Port 5004)
+  vat_service:
+    build:
+      context: ./vat_service
+      dockerfile: Dockerfile
+    container_name: baraba_vat
+    ports:
+      - "5004:5004"
+    depends_on:
+      - postgres
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=jesterac
+      - DB_USER=postgres
+      - DB_PASSWORD=pas+123
+    networks:
+      - baraba_network
+
+  # Baraba Main Service (Port 5000)
+  baraba_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: baraba_main
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - scanner_service
+      - identity_service
+      - vies_service
+      - vat_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=jesterac
+      - DB_USER=postgres
+      - DB_PASSWORD=pas+123
+      - SCANNER_SERVICE_URL=http://scanner_service:5001
+      - IDENTITY_SERVICE_URL=http://identity_service:5002
+      - VIES_SERVICE_URL=http://vies_service:5003
+      - VAT_SERVICE_URL=http://vat_service:5004
+    networks:
+      - baraba_network
+
+  # Frontend Service (Port 5173)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: baraba_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - baraba_service
+    networks:
+      - baraba_network
+
+volumes:
+  postgres_data:
+
+networks:
+  baraba_network:
+    driver: bridge

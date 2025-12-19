@@ -4,7 +4,7 @@ import orm/orm
 
 import ../models/counterpart
 import ../db/config
-import ../utils/json_utils
+import baraba_shared/utils/json_utils
 
 # Helper to parse query string parameters
 proc parseQueryParams(queryString: string): Table[string, string] =

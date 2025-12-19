@@ -1,9 +1,9 @@
 import std/[json, options, strutils]
 import jester
 import ../services/auth
-import ../utils/json_utils
-import ../utils/i18n
-import ../models/user
+import baraba_shared/utils/json_utils
+import baraba_shared/utils/i18n
+import baraba_shared/models/user
 import ../db/config
 
 proc authRoutes*(): auto =

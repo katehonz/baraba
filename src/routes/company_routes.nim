@@ -4,7 +4,7 @@ import orm/orm
 
 import ../models/[company, currency, account]
 import ../db/config
-import ../utils/json_utils
+import baraba_shared/utils/json_utils
 
 proc companyRoutes*(): auto =
   router companyRouter:

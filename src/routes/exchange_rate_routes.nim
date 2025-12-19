@@ -4,7 +4,7 @@ import orm/orm
 
 import ../db/config
 import ../models/exchangerate
-import ../utils/json_utils
+import baraba_shared/utils/json_utils
 
 proc exchangeRateRoutes*(): auto =
   router exchangeRateRouter:

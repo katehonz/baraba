@@ -4,7 +4,7 @@ import orm/orm
 
 import ../models/journal
 import ../db/config
-import ../utils/json_utils
+import baraba_shared/utils/json_utils
 
 proc parseDate(s: string): DateTime =
   if s.len == 0:

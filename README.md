@@ -1,540 +1,333 @@
-# Baraba - Счетоводна програма
+# Baraba - Счетоводна програма с Микросървисна Архитектура
 
 ![Baraba](baraba-header.jpg)
 
-Минимална счетоводна система, построена с Nim (Jester) backend и React frontend.
+Модерна счетоводна система, построена с **микросървисна архитектура** с Nim backend и React frontend.
 
-## Технологии
+## 🏗️ Архитектура
 
-### Backend
-- **Nim** 2.2.4
-- **Jester** - Web framework (локален fork с Nim 2.x съвместимост)
-- **httpbeast** - HTTP сървър (локален fork с thread-safety fixes)
-- **[orm-baraba](https://github.com/katehonz/orm-baraba)** - Собствен PostgreSQL ORM с enterprise-grade функционалности
-- **[jwt-nim-baraba](https://github.com/katehonz/jwt-nim-baraba)** - Собствена JWT библиотека
-- **nim-graphql** - GraphQL API
+Baraba използва **микросървисна архитектура** за максимална производителност, мащабируемост и надеждност:
 
-> **Забележка:** Проектът използва локални forks на Jester и httpbeast в `src/vendor/`,
-> които включват fixes за Nim 2.x съвместимост и подобрена thread-safety.
+```
+Frontend (React) → API Gateway (Monolith) → Микросървиси
+```
 
-### Frontend
-- **React** 19 + TypeScript
-- **Vite** 7 - Build tool
-- **Chakra UI** 2 - UI библиотека с light/dark theme
-- **axios** - HTTP клиент
-- **react-router-dom** - Routing
-- **@tanstack/react-query** - Data fetching
+### 📋 Микросървиси
 
-### База данни
-- **PostgreSQL** 15+
+| Сървис | Порт | Отговорност | Технология |
+|--------|------|--------------|-------------|
+| **Frontend** | 5173 | React UI | React 19 + TypeScript |
+| **API Gateway** | 5000 | Основна бизнес логика, маршрутизация | Nim + Jester |
+| **Identity Service** | 5002 | Аутентикация и управление на потребители | Nim + Jester |
+| **Scanner Service** | 5001 | AI сканиране на фактури | Nim + Jester |
+| **VIES Service** | 5003 | Валидация на VAT номера (EU VIES) | Nim + Jester |
+| **VAT Service** | 5004 | Генериране на VAT файлове за НАП | Nim + Jester |
+| **PostgreSQL** | 5432 | База данни | PostgreSQL 15+ |
 
-## Бърз старт
+### 🔄 Комуникация
+
+- **Frontend → API Gateway**: HTTP/REST
+- **API Gateway → Микросървиси**: HTTP/REST (proxy)
+- **Микросървиси → База данни**: Директен достъп (Shared Database)
+
+## 🚀 Бърз старт с Docker (Препоръчително)
 
 ### 1. Изисквания
 
-```bash
-# Nim
-choosenim stable
+- **Docker** & **Docker Compose**
+- **Modern web browser**
 
-# Node.js
-node --version  # v18+
-
-# PostgreSQL
-psql --version  # 15+
-```
-
-### 2. Настройка на базата данни
+### 2. Стартиране на всички услуги
 
 ```bash
-# Създай база данни
-createdb jesterac
-
-# Или с psql
-psql -U postgres -c "CREATE DATABASE jesterac;"
-```
-
-### 3. Инсталация
-
-```bash
-# Clone
-git clone https://github.com/katehonz/baraba.git
+git clone <repository-url>
 cd baraba
 
-# Frontend dependencies
-cd frontend
-npm install
-cd ..
+# Стартирай всички услуги (включително база данни и frontend)
+docker-compose up -d
+
+# Инициализирай базата данни
+docker-compose exec baraba_service ./bin/migrate
 ```
 
-### 4. Миграция и seed на базата данни
+### 3. Достъп до приложението
 
-```bash
-nim c -d:ssl -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/migrate src/db/migrate.nim
+- **Frontend**: http://localhost:5173
+- **API Gateway**: http://localhost:5000
+- **Health Checks**: http://localhost:5001/health, http://localhost:5002/health, и т.н.
 
-./bin/migrate
-```
+### 4. Вход в системата
 
-Това създава:
-- Всички таблици
-- Групи потребители (Администратори, Потребители)
-- **Default admin user**: `admin` / `admin123`
-- Валути (BGN, EUR, USD)
+- **Username**: `admin`
+- **Password**: `admin123`
 
-### 5. Компилация и стартиране
+## 🛠️ Технологии
 
-```bash
-# Backend
-nim c -d:ssl -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
+### Backend Технологии
 
-./bin/baraba
-# Сървърът слуша на http://localhost:5000
+- **Nim** 2.2.6+ - Компилируем език за системен софтуер
+- **Jester** - Лек и бърз web framework (с локални подобрения)
+- **orm-baraba** - Собствен PostgreSQL ORM с enterprise-grade функционалности
+- **jwt-nim-baraba** - JWT библиотека за автентикация
+- **nim-graphql** - GraphQL API поддръжка
 
-# Frontend (в друг терминал)
-cd frontend
-npm run dev
-# Приложението е на http://localhost:5173
-```
+### Frontend Технологии
 
-### Production build
+- **React** 19 + TypeScript - Модерен UI framework
+- **Vite** 7 - Бърз build tool и dev сървър
+- **Chakra UI** 2 - Component библиотека с light/dark теми
+- **axios** - HTTP клиент за API комуникация
+- **react-router-dom** - Client-side routing
+- **@tanstack/react-query** - Server state management
 
-```bash
-# Backend с оптимизации
-nim c -d:release -d:ssl -p:src/vendor -p:src/vendor/tinypool/src -p:src/vendor/nim-graphql -o:bin/baraba src/baraba.nim
+### Инфраструктура
 
-# Frontend build
-cd frontend
-npm run build
-# Static файловете са в frontend/dist/
-```
+- **PostgreSQL** 15+ - Релационна база данни
+- **Docker** - Контейнеризация
+- **nginx** - Reverse proxy (за frontend)
 
-## Default Credentials
-
-| Потребител | Парола | Роля |
-|------------|--------|------|
-| admin | admin123 | Администратор |
-
-**Важно:** Сменете паролата в production!
-
-## Структура на проекта
+## 📁 Проектна структура
 
 ```
 baraba/
-├── src/
-│   ├── baraba.nim          # Главен файл - REST API routes
-│   ├── db/
-│   │   ├── config.nim      # Database connection pool
-│   │   └── migrate.nim     # Миграции и seed данни
-│   ├── models/             # ORM модели (norm)
-│   │   ├── user.nim        # User, UserGroup
-│   │   ├── company.nim     # Company
-│   │   ├── account.nim     # Account (сметкоплан)
-│   │   ├── counterpart.nim # Counterpart (контрагенти)
-│   │   ├── journal.nim     # JournalEntry, EntryLine
-│   │   ├── currency.nim    # Currency
-│   │   ├── vatrate.nim     # VatRate
-│   │   └── exchangerate.nim# ExchangeRate
-│   ├── services/
-│   │   └── auth.nim        # JWT автентикация
-│   ├── graphql/
-│   │   ├── schema.graphql  # GraphQL schema
-│   │   └── resolvers.nim   # GraphQL resolvers
-│   ├── utils/
-│   │   └── json_utils.nim  # JSON помощни функции
-│   └── vendor/             # Vendored dependencies
-│       ├── nim-graphql/
-│       └── tinypool/
-├── frontend/
-│   ├── src/
-│   │   ├── api/            # API клиенти (axios)
-│   │   ├── components/     # React компоненти
-│   │   │   └── Layout.tsx  # Main layout с навигация
-│   │   ├── contexts/       # React contexts
-│   │   │   ├── AuthContext.tsx
-│   │   │   └── CompanyContext.tsx
-│   │   ├── pages/          # Страници
-│   │   │   ├── auth/       # Login, Register
-│   │   │   ├── companies/  # Фирми
-│   │   │   ├── accounts/   # Сметкоплан
-│   │   │   ├── counterparts/ # Контрагенти
-│   │   │   └── journal/    # Дневник
-│   │   ├── types/          # TypeScript типове
-│   │   ├── theme.ts        # Chakra UI тема
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   └── package.json
-├── bin/                    # Compiled binaries
-└── README.md
+├── 🐳 docker-compose.yml          # Multi-service orchestration
+├── 📚 MICROSERVICES.md          # Детайлна архитектурна документация
+├── 📋 DOCKER.md                 # Docker специфична документация
+├── 🌐 FRONTEND_IMPACT.md        # Frontend анализ при миграция
+│
+├── 📁 frontend/                 # React приложение
+│   ├── 🐳 Dockerfile
+│   ├── 📄 nginx.conf
+│   └── 📁 src/
+│
+├── 📁 src/                     # API Gateway (монолит)
+│   ├── 📄 baraba.nim
+│   ├── 📁 models/
+│   ├── 📁 routes/
+│   └── 📁 services/
+│
+├── 📁 baraba_shared/            # Споделена библиотека
+│   ├── 📁 models/              # Общи модели (User, Company, и др.)
+│   ├── 📁 db/                  # DB конфигурация
+│   └── 📁 utils/               # Споделени утилити
+│
+├── 📁 identity_service/         # Аутентикационен микросървис
+├── 📁 scanner_service/          # AI сканиращ микросървис
+├── 📁 vies_service/            # VIES валидационен микросървис
+└── 📁 vat_service/             # VAT генерационен микросървис
 ```
 
-## API Reference
+## 🔧 Ръчно стартиране (за разработка)
 
-### REST Endpoints
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| GET | `/` | Health check |
-| POST | `/api/auth/login` | Вход |
-| POST | `/api/auth/register` | Регистрация |
-| GET | `/api/auth/me` | Текущ потребител |
-| GET | `/api/companies` | Списък фирми |
-| POST | `/api/companies` | Нова фирма |
-| GET | `/api/companies/:id` | Фирма по ID |
-| GET | `/api/accounts/:id` | Сметка по ID |
-| GET | `/api/accounts/company/:companyId` | Сметкоплан на фирма |
-| POST | `/api/accounts` | Нова сметка |
-| GET | `/api/counterparts/:id` | Контрагент по ID |
-| GET | `/api/counterparts?companyId=X` | Контрагенти на фирма |
-| POST | `/api/counterparts` | Нов контрагент |
-| GET | `/api/journal-entries?companyId=X` | Дневник на фирма |
-| GET | `/api/journal-entries/:id` | Запис по ID |
-| POST | `/api/journal-entries` | Нов запис |
-| PUT | `/api/journal-entries/:id` | Редакция на запис |
-| POST | `/api/journal-entries/:id/post` | Осчетоводяване |
-| POST | `/api/journal-entries/:id/unpost` | Отмяна на осчетоводяване |
-| GET | `/api/entry-lines?journalEntryId=X` | Редове на запис |
-| POST | `/api/entry-lines` | Нов ред |
-| PUT | `/api/entry-lines/:id` | Редакция на ред |
-| DELETE | `/api/entry-lines/:id` | Изтриване на ред |
-| GET | `/api/reports/turnover-sheet` | Оборотна ведомост |
-| GET | `/api/reports/general-ledger` | Главна книга |
-| **ДДС/НП модул** |
-| POST | `/api/v1/vat/generate/:period` | Генериране на ДДС файлове за НАП |
-
-### GraphQL Endpoint
-
-```
-POST /graphql
-```
-
-**Примерни заявки:**
-
-```graphql
-# Вход
-mutation {
-  login(username: "admin", password: "admin123") {
-    token
-    user { id username email }
-  }
-}
-
-# Списък фирми
-query {
-  companies {
-    id name eik vatNumber
-  }
-}
-
-# Счетоводен дневник
-query {
-  journalEntries(companyId: 1) {
-    id documentDate documentNumber description totalAmount isPosted
-    lines {
-      id debitAmount creditAmount
-      account { code name }
-    }
-  }
-}
-
-# Оборотна ведомост
-query {
-  turnoverSheet(companyId: 1, startDate: "2024-01-01", endDate: "2024-12-31") {
-    account { code name accountType }
-    openingDebit openingCredit
-    turnoverDebit turnoverCredit
-    closingDebit closingCredit
-  }
-}
-```
-
-## Конфигурация
-
-### База данни (src/db/config.nim)
-
-```nim
-const
-  DbHost* = "localhost"
-  DbUser* = "postgres"
-  DbPassword* = "pas+123"
-  DbName* = "jesterac"
-  PoolSize* = 10
-```
-
-### JWT (src/services/auth.nim)
-
-Използваме собствена JWT библиотека: [jwt-nim-baraba](https://github.com/katehonz/jwt-nim-baraba)
-
-```nim
-const
-  JwtSecret* = "your-secret-key-change-in-production-min-32-chars!"
-  JwtExpirationHours* = 24
-```
-
-**Важно:** Сменете `JwtSecret` в production!
-
-## VPS Deployment
-
-### 1. Подготовка на сървъра
+Ако искате да разработвате локално:
 
 ```bash
-# Инсталирай Nim
-curl https://nim-lang.org/choosenim/init.sh -sSf | sh
+# 1. Стартни базата данни
+docker-compose up -d postgres
 
-# Инсталирай PostgreSQL
-apt install postgresql postgresql-contrib
+# 2. Стартни микросървисите в отделни терминали
+cd scanner_service && nimble build -y && ./scanner_service &
+cd identity_service && nimble build -y && ./identity_service &
+cd vies_service && nimble build -y && ./vies_service &
+cd vat_service && nimble build -y && ./vat_service &
 
-# Инсталирай Node.js (за frontend build)
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
+# 3. Стартни API Gateway
+nimble build -y && ./baraba &
 
-# Инсталирай Caddy (препоръчително)
-apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update && apt install caddy
+# 4. Стартни frontend
+cd frontend && npm install && npm run dev
 ```
 
-### 2. Deploy
+## 🌐 API Документация
 
+### Gateway Pattern
+
+Всички frontend заявки минават през API Gateway (порт 5000):
+
+```
+/api/auth/*     → Identity Service (5002)
+/api/users/*     → Identity Service (5002)
+/api/vies/*      → VIES Service (5003)
+/api/vat/*       → VAT Service (5004)
+/api/scan*       → Scanner Service (5001)
+/api/*           → Gateway (5000)
+```
+
+### Основни Ендпойнти
+
+#### Аутентикация (Identity Service)
+- `POST /api/auth/login` - Вход
+- `POST /api/auth/register` - Регистрация
+- `GET /api/auth/me` - Информация за текущ потребител
+
+#### Управление на потребители (Identity Service)
+- `GET /api/users` - Списък с потребители
+- `POST /api/users` - Създаване на потребител
+- `PUT /api/users/{id}` - Обновяване на потребител
+- `DELETE /api/users/{id}` - Изтриване на потребител
+
+#### VAT Валидация (VIES Service)
+- `GET /api/vies/validate/{vatNumber}` - Валидация на VAT номер
+
+#### VAT Генерация (VAT Service)
+- `POST /api/vat/generate/{period}` - Генериране на VAT файлове
+
+#### AI Сканиране (Scanner Service)
+- `POST /api/scan-invoice` - Сканиране на фактура
+
+## 🎯 Предимства на микросървисната архитектура
+
+### 🚀 Производителност
+- **Паралелна обработка**: Всеки микросървис работи независимо
+- **Мащабируемост**: Всеки сервиз се мащабира според натоварването
+- **Оптимизация на ресурси**: По-малки, фокусирани приложения
+
+### 🔧 Разработка
+- **Независими екипи**: Всеки микросървис се разработва независимо
+- **Технологична гъвкавост**: Различни технологии за различни сервизи
+- **Бързоdeployment**: По-малки codebase-и, по-бързи build-ове
+
+### 🛡️ Операции
+- **Fault Isolation**: Проблем в един сервиз не срива цялата система
+- **Сигурност**: По-малки attack surfaces, фокусирана сигурност
+- **Поддръжка**: По-лесно debugging, насочени update-и
+
+## 🔒 Сигурност
+
+### Мерки за сигурност
+- **JWT Аутентикация**: За достъп до API
+- **CORS Headers**: За frontend интеграция
+- **Non-root контейнери**: Намалена attack surface
+- **Environment Variables**: Защита на чувствителни данни
+
+### Будещи подобрения
+- **OAuth2/OpenID Connect**: Външна автентикация
+- **API Rate Limiting**: Предотвратяване на злоупотреби
+- **Service Mesh**: Междусървисна сигурност
+
+## 📊 Мониторинг
+
+### Health Checks
 ```bash
-# Clone проекта
-git clone https://github.com/katehonz/baraba.git
-cd baraba
-
-# Настрой базата данни
-sudo -u postgres createdb jesterac
-sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'your-password';"
-
-# Редактирай src/db/config.nim с новата парола
-
-# Build backend (използва config.nims автоматично)
-nim c -d:release src/baraba.nim
-
-# Миграции
-nim c -d:release src/db/migrate.nim
-./src/migrate
-
-# Build frontend
-cd frontend
-npm install
-npm run build
-cd ..
+# Провери всички сервизи
+curl http://localhost:5001/health  # Scanner
+curl http://localhost:5002/health  # Identity
+curl http://localhost:5003/health  # VIES
+curl http://localhost:5004/health  # VAT
+curl http://localhost:5000/health  # Gateway
 ```
 
-### 3. Environment Variables
-
-Сървърът поддържа следните environment variables:
-
-| Variable | Default | Описание |
-|----------|---------|----------|
-| `PORT` | 5000 | Порт на който слуша сървъра |
-
+### Логване
 ```bash
-# Примери
-./baraba                    # Слуша на порт 5000
-PORT=5001 ./baraba          # Слуша на порт 5001
+# Преглед на логове за всички сервизи
+docker-compose logs -f
+
+# Специфичен сервиз
+docker-compose logs -f identity_service
 ```
 
-### 4. Single Instance (за development/малки сайтове)
+## 🐛 Troubleshooting
 
-**Systemd service** (`/etc/systemd/system/baraba.service`):
-```ini
-[Unit]
-Description=Baraba Accounting API
-After=network.target postgresql.service
+### Чести проблеми
 
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/baraba
-ExecStart=/opt/baraba/baraba
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
+#### Сервиз не стартира
 ```bash
-systemctl enable baraba
-systemctl start baraba
+# Провери логове
+docker-compose logs service_name
+
+# Провери статус
+docker-compose ps
+
+# Провери порт конфликти
+netstat -tulpn | grep :5000
 ```
 
-### 5. Multi-Instance Cluster (за production с много ядра)
-
-За максимална производителност на multi-core сървъри, стартирайте множество инстанции зад load balancer.
-
-**Systemd template** (`/etc/systemd/system/baraba@.service`):
-```ini
-[Unit]
-Description=Baraba Accounting API (port %i)
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/baraba
-Environment="PORT=%i"
-ExecStart=/opt/baraba/baraba
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Активиране на 16 инстанции** (за 16-core сървър):
+#### Database проблеми
 ```bash
-for i in {5000..5015}; do
-    systemctl enable baraba@$i
-    systemctl start baraba@$i
-done
+# Тест на връзка с базата
+docker-compose exec postgres psql -U postgres -d jesterac
 
-# Провери статуса
-systemctl status 'baraba@*'
+# Провери network connectivity
+docker-compose exec baraba_service ping postgres
 ```
 
-### 6. Caddy Reverse Proxy (препоръчително)
-
-**Caddyfile** (`/etc/caddy/Caddyfile`):
-```caddyfile
-baraba.example.com {
-    # Frontend static files
-    root * /opt/baraba/frontend/dist
-    file_server
-
-    # API и GraphQL - load balanced към множество инстанции
-    handle /api/* {
-        reverse_proxy localhost:5000 localhost:5001 localhost:5002 localhost:5003 \
-                      localhost:5004 localhost:5005 localhost:5006 localhost:5007 \
-                      localhost:5008 localhost:5009 localhost:5010 localhost:5011 \
-                      localhost:5012 localhost:5013 localhost:5014 localhost:5015 {
-            lb_policy least_conn
-            health_uri /health
-            health_interval 10s
-        }
-    }
-
-    handle /graphql {
-        reverse_proxy localhost:5000 localhost:5001 localhost:5002 localhost:5003 \
-                      localhost:5004 localhost:5005 localhost:5006 localhost:5007 \
-                      localhost:5008 localhost:5009 localhost:5010 localhost:5011 \
-                      localhost:5012 localhost:5013 localhost:5014 localhost:5015 {
-            lb_policy least_conn
-        }
-    }
-
-    # SPA fallback
-    handle {
-        try_files {path} /index.html
-    }
-}
-```
-
-За **single instance**:
-```caddyfile
-baraba.example.com {
-    root * /opt/baraba/frontend/dist
-    file_server
-
-    handle /api/* {
-        reverse_proxy localhost:5000
-    }
-
-    handle /graphql {
-        reverse_proxy localhost:5000
-    }
-
-    handle {
-        try_files {path} /index.html
-    }
-}
-```
-
+#### Frontend проблеми
 ```bash
-systemctl reload caddy
+# Провери API connectivity
+curl http://localhost:5000/health
+
+# Преглед frontend logs
+docker-compose logs frontend
 ```
 
-### 7. Nginx Reverse Proxy (алтернатива)
+## 📈 Мащабируемост
 
+### Horizontal Scaling
+```yaml
+# Docker Compose scaling
+services:
+  identity_service:
+    deploy:
+      replicas: 3
+  baraba_service:
+    deploy:
+      replicas: 2
+```
+
+### Load Balancer
 ```nginx
-upstream baraba_cluster {
-    least_conn;
-    server 127.0.0.1:5000;
-    server 127.0.0.1:5001;
-    server 127.0.0.1:5002;
-    server 127.0.0.1:5003;
-    # ... добави още за повече ядра
+upstream api_gateway {
+    server baraba_service:5000;
 }
 
 server {
     listen 80;
-    server_name your-domain.com;
-
-    # Frontend static files
-    location / {
-        root /opt/baraba/frontend/dist;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API proxy
-    location /api {
-        proxy_pass http://baraba_cluster;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # GraphQL proxy
-    location /graphql {
-        proxy_pass http://baraba_cluster;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+    location /api/ {
+        proxy_pass http://api_gateway;
     }
 }
 ```
 
-## Функционалност
+## 🔮 Будещи подобрения
 
-### Реализирано
-- [x] Автентикация (JWT)
-- [x] Управление на фирми
-- [x] Сметкоплан
-- [x] Контрагенти
-- [x] Счетоводен дневник
-- [x] Осчетоводяване/отмяна
-- [x] Оборотна ведомост
-- [x] Главна книга
-- [x] **ДДС модул** - Генериране на DEKLAR.TXT, POKUPKI.TXT, PRODAGBI.txt
-- [x] **НАП съвместимост** - Windows-1251 кодиране и фиксирани формати
-- [x] GraphQL API
-- [x] Light/Dark theme
-- [x] Responsive UI
+### Краткосрочни
+- **Monitoring Setup**: Prometheus + Grafana
+- **Centralized Logging**: ELK stack или подобно
+- **Load Balancer**: nginx reverse proxy
 
-### Планирано
-- [x] Фактуриране (частично - в ДДС модула)
-- [x] ДДС дневници (пълно имплементиран)
-- [x] Експорт към NAP (автоматизиран)
-- [ ] Multi-currency операции
-- [ ] Банкови извлечения
-- [ ] Автоматично разпознаване на ДДС операции
-- [ ] Корекции на предходни периоди
+### Дългосрочни
+- **Database Per Service**: Отделни бази данни за всеки микросървис
+- **Service Discovery**: Динамична регистрация на сервизи
+- **Advanced Security**: OAuth2, API rate limiting
 
-## Разработчик
+## 📝 Миграция
 
-**Димитър Гигов**
-- Уебсайт: https://cyberbuch.org
-- Email: info@rustac.top
+Проектът е успешно мигриран от монолитна към микросървисна архитектура. Подробности за миграционния процес:
 
-### 🤖 AI-Assisted Development
+- **📋 doklad.md** - Миграционен доклад (на български)
+- **🌐 FRONTEND_IMPACT.md** - Анализ на въздействието върху frontend
+- **🐳 DOCKER.md** - Docker специфична документация
+- **📚 MICROSERVICES.md** - Пълна архитектурна документация
 
-Този проект използва модерни AI инструменти за ускоряване на development и осигуряване на високо качество. За детайлна информация вижте [AI Development Documentation](docs/ai-development.md).
+## 🤝 Допринасяне
 
-**Ключови приноси:**
-- ⚡ 5x по-бърз development цикъл  
-- 🔒 200% подобрение в code quality
-- 🚀 Multi-threading performance optimizations
-- 🛡️ Enterprise-grade thread-safe архитектура
+1. Fork на репозиторито
+2. Създаване на feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit на промените (`git commit -m 'Add amazing feature'`)
+4. Push към branch-a (`git push origin feature/amazing-feature`)
+5. Създаване на Pull Request
 
-## Лиценз
+## 📄 Лиценз
 
-MIT
+MIT License - виж [LICENSE](LICENSE) файл за детайли.
+
+## 🏁 Заключение
+
+Baraba е модерна счетоводна система, която успешно трансформира от монолитна към **микросървисна архитектура** с всички предимства:
+
+- **🚀 Мащабируемост** - Всеки микросървис се мащабира независимо
+- **🛡️ Надеждност** - Отказ в един сервиз не срива цялата система
+- **🔧 Поддръжка** - По-малки, фокусирани codebase-и
+- **🔄 Готов за бъдеще** - Подготвена за следващи архитектурни подобрения
+
+Системата е готова за продуктивна употреба с всички предимства на микросървисната архитектура. 🎉

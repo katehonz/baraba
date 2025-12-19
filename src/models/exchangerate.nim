@@ -1,6 +1,7 @@
 import std/[times, options]
 import orm/orm
-import currency, user
+import currency
+import baraba_shared/models/user
 
 type
   ExchangeRate* = object of Model

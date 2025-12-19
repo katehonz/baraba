@@ -3,9 +3,10 @@ import std/[json, strutils, options, times, tables, math]
 import orm/orm
 import "../vendor/nim-graphql/graphql/api"
 import ../db/config
-import ../models/[user, company, account, counterpart, journal]
+import baraba_shared/models/user
+import ../models/[company, account, journal, counterpart]
 import ../services/auth
-import ../utils/json_utils
+import baraba_shared/utils/json_utils
 
 type
   BarabaContext* = ref object of RootRef

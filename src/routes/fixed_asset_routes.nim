@@ -4,7 +4,7 @@ import orm/orm
 
 import ../db/config
 import ../models/[fixed_asset, fixed_asset_category, depreciation_journal, journal]
-import ../utils/json_utils
+import baraba_shared/utils/json_utils
 
 proc fixedAssetRoutes*(): auto =
   router fixedAssetRouter:

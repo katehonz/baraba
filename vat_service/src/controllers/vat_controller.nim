@@ -1,8 +1,8 @@
 import std/[times, strformat, strutils, options, algorithm, sequtils]
-from ../utils/encoding import toWindows1251
+import ../utils/encoding
 import orm/orm
-import ../models/[journal, company, counterpart]
-import ../db/config
+import baraba_shared/db/config
+import baraba_shared/models/[journal, company, counterpart]
 
 type
   VatTotals* = object

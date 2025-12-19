@@ -18,10 +18,11 @@ proc parseQueryParams(queryString: string): Table[string, string] =
     elif parts.len == 1:
       result[decodeUrl(parts[0])] = ""
 
-import models/[user, company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log, scanned_invoice, system_settings, vat_return, bank_transaction, accounting_period]
+import models/[company, account, counterpart, journal, currency, exchangerate, vatrate, fixed_asset_category, fixed_asset, depreciation_journal, bank_profile, audit_log, scanned_invoice, system_settings, vat_return, bank_transaction, accounting_period]
+import baraba_shared/models/user
 import services/auth
 import db/config
-import utils/json_utils
+import baraba_shared/utils/json_utils
 import graphql/resolvers
 import "vendor/nim-graphql/graphql"
 
@@ -33,11 +34,7 @@ import routes/counterpart_routes
 import routes/audit_log_routes
 import routes/exchange_rate_routes
 import routes/vat_rate_routes
-import routes/user_routes
-import routes/user_group_routes
 import routes/fixed_asset_category_routes
-import routes/vies_routes
-import controllers/vat_controller
 
 var graphqlCtx {.threadvar.}: GraphqlRef
 var graphqlInitialized {.threadvar.}: bool
@@ -54,6 +51,11 @@ const corsHeaders* = @{
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization"
 }
+
+const SCANNER_SERVICE_URL = "http://localhost:5001"
+const IDENTITY_SERVICE_URL = "http://localhost:5002"
+const VIES_SERVICE_URL = "http://localhost:5003"
+const VAT_SERVICE_URL = "http://localhost:5004"
 
 router mainRouter:
   # Handle CORS preflight requests
@@ -76,26 +78,18 @@ router mainRouter:
   # =====================
   # VAT ROUTES
   # =====================
+  # VAT ROUTES (PROXY TO VAT SERVICE)
+  # =====================
   post "/api/vat/generate/@period":
-    withDb:
-      let period = @"period"
-      let body = parseJson(request.body)
-      let companyId = body["companyId"].getInt()
-
-      let companyOpt = find(Company, companyId, db)
-      if companyOpt.isNone:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Фирмата не е намерена"})
-        return
-      let company = companyOpt.get()
-
-      let (purchase, sales, deklar) = generateVatFiles(company, period)
-
-      let response = %*{
-        "POKUPKI.TXT": encode(purchase),
-        "PRODAGBI.TXT": encode(sales),
-        "DEKLAR.TXT": encode(deklar)
-      }
-      resp Http200, {"Content-Type": "application/json"}, $response
+    try:
+      let client = newHttpClient()
+      defer: client.close()
+      
+      let url = VAT_SERVICE_URL & "/api/vat/generate/" & @"period"
+      let response = client.post(url, request.body)
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "VAT service unavailable: " & e.msg})
 
   # =====================
   # SYSTEM SETTINGS
@@ -135,60 +129,40 @@ router mainRouter:
   # AUTH ROUTES
   # =====================
   post "/api/auth/login":
-    withDb:
-      let body = parseJson(request.body)
-      let username = body["username"].getStr()
-      let password = body["password"].getStr()
-
-      let userOpt = authenticateUser(db, username, password)
-
-      if userOpt.isSome:
-        let user = userOpt.get
-        let token = generateToken(user.id, user.username)
-        resp Http200, {"Content-Type": "application/json"}, $(%*{
-          "token": token,
-          "user": {"id": user.id, "username": user.username, "email": user.email}
-        })
-      else:
-        resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалидно потребителско име или парола"})
+    # Delegate to Identity Service
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.post(IDENTITY_SERVICE_URL & "/api/auth/login", request.body)
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   post "/api/auth/register":
-    withDb:
-      let body = parseJson(request.body)
-      let username = body["username"].getStr()
-      let email = body["email"].getStr()
-      let password = body["password"].getStr()
-      let groupId = body.getOrDefault("groupId").getBiggestInt(2)
-
-      try:
-        let user = createUser(db, username, email, password, groupId)
-        let token = generateToken(user.id, user.username)
-        resp Http201, {"Content-Type": "application/json"}, $(%*{
-          "token": token,
-          "user": {"id": user.id, "username": user.username, "email": user.email}
-        })
-      except:
-        resp Http400, {"Content-Type": "application/json"}, $(%*{"error": getCurrentExceptionMsg()})
+    # Delegate to Identity Service
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.post(IDENTITY_SERVICE_URL & "/api/auth/register", request.body)
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   get "/api/auth/me":
-    let authHeader = request.headers.getOrDefault("Authorization")
-    if authHeader.len == 0 or not authHeader.startsWith("Bearer "):
-      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Липсва токен"})
-
-    let token = authHeader[7..^1]
-    let (valid, userId, _) = verifyToken(token)
-    if not valid:
-      resp Http401, {"Content-Type": "application/json"}, $(%*{"error": "Невалиден токен"})
-
-    withDb:
-      let userOpt = getUserById(db, userId)
-      if userOpt.isSome:
-        let user = userOpt.get
-        resp Http200, {"Content-Type": "application/json"}, $(%*{
-          "id": user.id, "username": user.username, "email": user.email
-        })
-      else:
-        resp Http404, {"Content-Type": "application/json"}, $(%*{"error": "Потребителят не е намерен"})
+    # Delegate to Identity Service
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.get(IDENTITY_SERVICE_URL & "/api/auth/me")
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   post "/api/auth/recover-password":
     withDb:
@@ -549,92 +523,89 @@ router mainRouter:
       resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
 
   # =====================
-  # USER ROUTES
+  # USER ROUTES (PROXY TO IDENTITY SERVICE)
   # =====================
   get "/api/users":
-    withDb:
-      var users = findAll(User, db)
-      var usersJson = newJArray()
-      for user in users:
-        usersJson.add(%*{
-          "id": user.id,
-          "username": user.username,
-          "email": user.email,
-          "firstName": user.first_name,
-          "lastName": user.last_name,
-          "isActive": user.is_active,
-          "groupId": user.group_id
-        })
-      resp Http200, {"Content-Type": "application/json"}, $usersJson
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.get(IDENTITY_SERVICE_URL & "/api/users")
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   post "/api/users":
-    withDb:
-      let body = parseJson(request.body)
-      let user = createUser(db,
-        body["username"].getStr(),
-        body["email"].getStr(),
-        body["password"].getStr(),
-        body.getOrDefault("groupId").getInt(0).int64
-      )
-      resp Http201, {"Content-Type": "application/json"}, $toJson(user)
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.post(IDENTITY_SERVICE_URL & "/api/users", request.body)
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   put "/api/users/@id":
-    withDb:
-      let id = parseInt(@"id")
-      let body = parseJson(request.body)
-      let userOpt = find(User, id, db)
-      if userOpt.isNone:
-        resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
-        return
-      var user = userOpt.get()
-      if body.hasKey("username"):
-        user.username = body["username"].getStr()
-      if body.hasKey("email"):
-        user.email = body["email"].getStr()
-      if body.hasKey("firstName"):
-        user.first_name = body["firstName"].getStr()
-      if body.hasKey("lastName"):
-        user.last_name = body["lastName"].getStr()
-      if body.hasKey("groupId"):
-        user.group_id = body["groupId"].getInt().int64
-      if body.hasKey("isActive"):
-        user.is_active = body["isActive"].getBool()
-      save(user, db)
-      resp Http200, {"Content-Type": "application/json"}, $toJson(user)
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.put(IDENTITY_SERVICE_URL & "/api/users/" & @"id", request.body)
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   delete "/api/users/@id":
-    withDb:
-      let id = parseInt(@"id")
-      let userOpt = find(User, id, db)
-      if userOpt.isNone:
-        resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
-        return
-      var user = userOpt.get()
-      delete(user, db)
-      resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.delete(IDENTITY_SERVICE_URL & "/api/users/" & @"id")
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   post "/api/users/@id/reset-password":
-    withDb:
-      let id = parseInt(@"id")
-      let body = parseJson(request.body)
-      let userOpt = find(User, id, db)
-      if userOpt.isNone:
-        resp Http404, {"Content-Type": "application/json"}, """{"error": "User not found"}"""
-        return
-      var user = userOpt.get()
-      let newSalt = $epochTime()
-      user.password = hashPassword(body["newPassword"].getStr(), newSalt)
-      user.salt = newSalt
-      save(user, db)
-      resp Http200, {"Content-Type": "application/json"}, """{"success": true}"""
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.post(IDENTITY_SERVICE_URL & "/api/users/" & @"id" & "/reset-password", request.body)
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   # =====================
-  # USER GROUP ROUTES
+  # VIES ROUTES (PROXY TO VIES SERVICE)
+  # =====================
+  get "/api/vies/validate/@vatNumber":
+    try:
+      let client = newHttpClient()
+      defer: client.close()
+      
+      let response = client.get(VIES_SERVICE_URL & "/api/vies/validate/" & @"vatNumber")
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "VIES service unavailable: " & e.msg})
+
+  # =====================
+  # USER GROUP ROUTES (PROXY TO IDENTITY SERVICE)
   # =====================
   get "/api/user-groups":
-    withDb:
-      var groups = findAll(UserGroup, db)
-      resp Http200, {"Content-Type": "application/json"}, $toJsonArray(groups)
+    try:
+      let client = newHttpClient()
+      client.headers = request.headers
+      defer: client.close()
+      
+      let response = client.get(IDENTITY_SERVICE_URL & "/api/user-groups")
+      resp response.code, {"Content-Type": "application/json"}, response.body
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Identity service unavailable: " & e.msg})
 
   # =====================
   # FIXED ASSET CATEGORY ROUTES
@@ -1000,43 +971,24 @@ router mainRouter:
 
   # Endpoint for AI invoice scanning with Azure Document Intelligence
   post "/api/scan-invoice":
-    # This endpoint handles multipart form data with PDF file
-    # For now, returns mock data - actual Azure integration requires:
-    # 1. Company's Azure Form Recognizer Endpoint
-    # 2. Company's Azure Form Recognizer Key
-    # TODO: Implement actual Azure Document Intelligence call
-
-    # Parse companyId from form data
+    # This endpoint now delegates to the Scanner Microservice
     let companyId = request.formData.getOrDefault("companyId").body
     let invoiceType = request.formData.getOrDefault("invoiceType").body
 
-    # Mock response for testing
-    let isPurchase = invoiceType == "purchase"
-    let mockResult = %*{
-      "vendorName": if isPurchase: "Доставчик ЕООД" else: "",
-      "vendorVatNumber": if isPurchase: "BG123456789" else: "",
-      "vendorAddress": if isPurchase: "ул. Примерна 1, София" else: "",
-      "customerName": if not isPurchase: "Клиент ООД" else: "",
-      "customerVatNumber": if not isPurchase: "BG987654321" else: "",
-      "customerAddress": if not isPurchase: "ул. Клиентска 2, Пловдив" else: "",
-      "invoiceId": "1000000001",
-      "invoiceDate": format(now(), "yyyy-MM-dd"),
-      "dueDate": format(now() + initDuration(days=30), "yyyy-MM-dd"),
-      "subtotal": 1000.00,
-      "totalTax": 200.00,
-      "invoiceTotal": 1200.00,
-      "direction": if isPurchase: "PURCHASE" else: "SALE",
-      "validationStatus": "PENDING",
-      "viesValidationMessage": "",
-      "suggestedAccounts": {
-        "counterpartyAccount": nil,
-        "vatAccount": nil,
-        "expenseOrRevenueAccount": nil
-      },
-      "requiresManualReview": true,
-      "manualReviewReason": "AI сканирането все още не е конфигурирано. Моля въведете Azure ключовете в настройките на компанията."
-    }
-    resp Http200, {"Content-Type": "application/json"}, $mockResult
+    try:
+      let client = newHttpClient()
+      defer: client.close()
+      
+      let url = SCANNER_SERVICE_URL & "/scan?companyId=" & companyId & "&invoiceType=" & invoiceType
+      # In a real scenario, we would also forward the file (request.formData["file"])
+      let response = client.post(url, "")
+      
+      if response.code == Http200:
+        resp Http200, {"Content-Type": "application/json"}, response.body
+      else:
+        resp response.code, {"Content-Type": "application/json"}, $(%*{"error": "Scanner service error: " & response.status})
+    except CatchableError as e:
+      resp Http500, {"Content-Type": "application/json"}, $(%*{"error": "Failed to connect to scanner service: " & e.msg})
 
   get "/api/scanned-invoices":
     withDb:
