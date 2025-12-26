@@ -1,0 +1,32 @@
+# Build stage
+FROM eclipse-temurin:21-jdk-alpine AS build
+WORKDIR /app
+
+# Copy maven files
+COPY pom.xml .
+COPY src ./src
+
+# Build
+RUN apk add --no-cache maven && \
+    mvn clean package -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1000 scanner && \
+    adduser -u 1000 -G scanner -D scanner
+
+# Copy jar
+COPY --from=build /app/target/*.jar app.jar
+
+# Create temp directory
+RUN mkdir -p /tmp/scanner-uploads && \
+    chown -R scanner:scanner /tmp/scanner-uploads
+
+USER scanner
+
+EXPOSE 5001
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

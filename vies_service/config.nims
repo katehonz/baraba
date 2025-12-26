@@ -1,0 +1,6 @@
+switch("path", "../src/vendor/jester")
+switch("path", "../src/vendor/httpbeast")
+switch("path", "../vendor/orm-baraba/src")
+switch("path", "../vendor/lowdb_baraba")
+switch("path", "../baraba_shared/src")
+switch("path", "../src")

@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="journal_entries"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20">
+
+    <parameter name="company_id" class="java.lang.String">
+        <defaultValueExpression><![CDATA["00000000-0000-0000-0000-000000000001"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="date_from" class="java.sql.Date"/>
+    <parameter name="date_to" class="java.sql.Date"/>
+
+    <queryString>
+        <![CDATA[
+        SELECT
+            je.entry_number,
+            je.accounting_date,
+            je.document_number,
+            je.description,
+            da.code AS debit_account,
+            ca.code AS credit_account,
+            COALESCE(el.debit_amount, 0) + COALESCE(el.credit_amount, 0) AS amount,
+            je.currency
+        FROM journal_entries je
+        JOIN entry_lines el ON el.journal_entry_id = je.id
+        LEFT JOIN accounts da ON el.debit_account_id = da.id
+        LEFT JOIN accounts ca ON el.credit_account_id = ca.id
+        WHERE je.company_id = CAST($P{company_id} AS UUID)
+        AND (CAST($P{date_from} AS DATE) IS NULL OR je.accounting_date >= CAST($P{date_from} AS DATE))
+        AND (CAST($P{date_to} AS DATE) IS NULL OR je.accounting_date <= CAST($P{date_to} AS DATE))
+        ORDER BY je.accounting_date, je.entry_number, el.line_number
+        ]]>
+    </queryString>
+
+    <field name="entry_number" class="java.lang.String"/>
+    <field name="accounting_date" class="java.sql.Date"/>
+    <field name="document_number" class="java.lang.String"/>
+    <field name="description" class="java.lang.String"/>
+    <field name="debit_account" class="java.lang.String"/>
+    <field name="credit_account" class="java.lang.String"/>
+    <field name="amount" class="java.math.BigDecimal"/>
+    <field name="currency" class="java.lang.String"/>
+
+    <variable name="total_amount" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{amount}]]></variableExpression>
+    </variable>
+
+    <title>
+        <band height="60">
+            <staticText>
+                <reportElement x="0" y="0" width="555" height="30"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="18" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Journal Entries Report]]></text>
+            </staticText>
+            <textField pattern="dd.MM.yyyy HH:mm">
+                <reportElement x="0" y="35" width="555" height="20"/>
+                <textElement textAlignment="Center"/>
+                <textFieldExpression><![CDATA[new java.util.Date()]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="0" width="60" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Date]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="60" y="0" width="80" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Doc #]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="140" y="0" width="155" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Description]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="295" y="0" width="60" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Debit]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="355" y="0" width="60" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Credit]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="415" y="0" width="100" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Amount]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="515" y="0" width="40" height="25" backcolor="#CCCCCC"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Curr]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="20">
+            <textField pattern="dd.MM.yyyy">
+                <reportElement x="0" y="0" width="60" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{accounting_date}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="60" y="0" width="80" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{document_number}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="140" y="0" width="155" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement verticalAlignment="Middle">
+                    <paragraph leftIndent="3"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{description}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="295" y="0" width="60" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{debit_account}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="355" y="0" width="60" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{credit_account}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement x="415" y="0" width="100" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="3"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{amount}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="515" y="0" width="40" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{currency}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="20">
+            <textField>
+                <reportElement x="435" y="0" width="80" height="20"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA["Page " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+            <textField evaluationTime="Report">
+                <reportElement x="515" y="0" width="40" height="20"/>
+                <textElement textAlignment="Left"/>
+                <textFieldExpression><![CDATA[" of " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+
+    <summary>
+        <band height="30">
+            <staticText>
+                <reportElement mode="Opaque" x="295" y="5" width="120" height="25" backcolor="#EEEEEE"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <text><![CDATA[Total:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement mode="Opaque" x="415" y="5" width="100" height="25" backcolor="#EEEEEE"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                    <paragraph rightIndent="3"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{total_amount}]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+</jasperReport>

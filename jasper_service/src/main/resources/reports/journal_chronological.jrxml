@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="journal_chronological"
+              pageWidth="842"
+              pageHeight="595"
+              orientation="Landscape"
+              columnWidth="802"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20">
+
+    <parameter name="company_id" class="java.lang.String">
+        <defaultValueExpression><![CDATA[""]]></defaultValueExpression>
+    </parameter>
+    <parameter name="date_from" class="java.sql.Date"/>
+    <parameter name="date_to" class="java.sql.Date"/>
+    <parameter name="account_code" class="java.lang.String"/>
+
+    <queryString>
+        <![CDATA[
+        SELECT
+            je.entry_number,
+            je.accounting_date,
+            je.document_number,
+            je.description AS je_description,
+            el.description AS line_description,
+            da.code AS debit_account,
+            da.name AS debit_account_name,
+            ca.code AS credit_account,
+            ca.name AS credit_account_name,
+            el.debit_amount,
+            el.credit_amount,
+            je.currency,
+            cp.name AS counterpart_name
+        FROM journal_entries je
+        JOIN entry_lines el ON el.journal_entry_id = je.id
+        LEFT JOIN accounts da ON da.id = el.debit_account_id
+        LEFT JOIN accounts ca ON ca.id = el.credit_account_id
+        LEFT JOIN counterparts cp ON cp.id = el.counterpart_id
+        WHERE je.company_id = CAST($P{company_id} AS UUID)
+            AND (CAST($P{date_from} AS DATE) IS NULL OR je.accounting_date >= CAST($P{date_from} AS DATE))
+            AND (CAST($P{date_to} AS DATE) IS NULL OR je.accounting_date <= CAST($P{date_to} AS DATE))
+            AND ($P{account_code} IS NULL OR $P{account_code} = ''
+                 OR da.code = $P{account_code} OR ca.code = $P{account_code})
+        ORDER BY je.accounting_date, je.entry_number, el.line_number
+        ]]>
+    </queryString>
+
+    <field name="entry_number" class="java.lang.String"/>
+    <field name="accounting_date" class="java.sql.Date"/>
+    <field name="document_number" class="java.lang.String"/>
+    <field name="je_description" class="java.lang.String"/>
+    <field name="line_description" class="java.lang.String"/>
+    <field name="debit_account" class="java.lang.String"/>
+    <field name="debit_account_name" class="java.lang.String"/>
+    <field name="credit_account" class="java.lang.String"/>
+    <field name="credit_account_name" class="java.lang.String"/>
+    <field name="debit_amount" class="java.math.BigDecimal"/>
+    <field name="credit_amount" class="java.math.BigDecimal"/>
+    <field name="currency" class="java.lang.String"/>
+    <field name="counterpart_name" class="java.lang.String"/>
+
+    <variable name="total_debit" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{debit_amount}]]></variableExpression>
+    </variable>
+    <variable name="total_credit" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{credit_amount}]]></variableExpression>
+    </variable>
+
+    <title>
+        <band height="80">
+            <staticText>
+                <reportElement x="0" y="0" width="802" height="30"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="18" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[ХРОНОЛОГИЧНА СПРАВКА]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="0" y="30" width="802" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="12" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <text><![CDATA[Chronological Journal Report]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="0" y="50" width="400" height="20"/>
+                <textElement>
+                    <font fontName="DejaVu Sans" size="10" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Период: " + ($P{date_from} != null ? new java.text.SimpleDateFormat("dd.MM.yyyy").format($P{date_from}) : "начало") + " - " + ($P{date_to} != null ? new java.text.SimpleDateFormat("dd.MM.yyyy").format($P{date_to}) : "днес")]]></textFieldExpression>
+            </textField>
+            <textField pattern="dd.MM.yyyy HH:mm">
+                <reportElement x="500" y="50" width="302" height="20"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA["Генериран: " + new java.text.SimpleDateFormat("dd.MM.yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="0" width="40" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[No]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="40" y="0" width="60" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Дата]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="100" y="0" width="70" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Документ]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="170" y="0" width="140" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Описание]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="310" y="0" width="100" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Контрагент]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="410" y="0" width="100" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Дебит с/ка]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="510" y="0" width="100" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Кредит с/ка]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="610" y="0" width="96" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Дебит]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="706" y="0" width="96" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="8" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Кредит]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="18">
+            <textField>
+                <reportElement x="0" y="0" width="40" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+            </textField>
+            <textField pattern="dd.MM.yyyy">
+                <reportElement x="40" y="0" width="60" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{accounting_date}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="100" y="0" width="70" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{document_number}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="170" y="0" width="140" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                    <paragraph leftIndent="2"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{line_description} != null && !$F{line_description}.isEmpty() ? $F{line_description} : $F{je_description}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="310" y="0" width="100" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                    <paragraph leftIndent="2"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{counterpart_name}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="410" y="0" width="100" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{debit_account}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="510" y="0" width="100" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{credit_account}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" isBlankWhenNull="true">
+                <reportElement x="610" y="0" width="96" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                    <paragraph rightIndent="3"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{debit_amount} != null && $F{debit_amount}.compareTo(java.math.BigDecimal.ZERO) > 0 ? $F{debit_amount} : null]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" isBlankWhenNull="true">
+                <reportElement x="706" y="0" width="96" height="18"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="7" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                    <paragraph rightIndent="3"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{credit_amount} != null && $F{credit_amount}.compareTo(java.math.BigDecimal.ZERO) > 0 ? $F{credit_amount} : null]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="25">
+            <line>
+                <reportElement x="0" y="0" width="802" height="1"/>
+            </line>
+            <textField>
+                <reportElement x="650" y="5" width="100" height="20"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA["Страница " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+            <textField evaluationTime="Report">
+                <reportElement x="750" y="5" width="52" height="20"/>
+                <textElement textAlignment="Left"/>
+                <textFieldExpression><![CDATA[" от " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+
+    <summary>
+        <band height="40">
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="5" width="610" height="25" backcolor="#336699"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="10" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                    <paragraph rightIndent="10"/>
+                </textElement>
+                <text><![CDATA[ОБЩО:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement mode="Opaque" x="610" y="5" width="96" height="25" backcolor="#EEEEEE"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="9" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{total_debit}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement mode="Opaque" x="706" y="5" width="96" height="25" backcolor="#EEEEEE"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="9" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{total_credit}]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+</jasperReport>

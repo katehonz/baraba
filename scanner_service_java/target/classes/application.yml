@@ -1,0 +1,80 @@
+server:
+  port: 5001
+
+spring:
+  application:
+    name: scanner-service
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:baraba}
+    username: ${DB_USER:baraba}
+    password: ${DB_PASSWORD:baraba}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 500MB
+
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 8
+        queue-capacity: 100
+      thread-name-prefix: scanner-async-
+
+# Azure Document Intelligence
+azure:
+  document-intelligence:
+    endpoint: ${AZURE_DI_ENDPOINT:}
+    api-key: ${AZURE_DI_API_KEY:}
+    timeout-seconds: 60
+    max-retries: 3
+
+# Batch processing settings
+scanner:
+  batch-size: 10
+  max-file-size-mb: 4
+  temp-dir: ${TEMP_DIR:/tmp/scanner-uploads}
+  max-storage-gb: 3
+  cleanup-on-complete: true
+
+# JWT settings
+jwt:
+  secret: ${JWT_SECRET:default-dev-secret-change-in-production}
+
+# Phoenix API
+phoenix:
+  api-url: ${PHOENIX_API_URL:http://baraba-web:4000}
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    bg.baraba.scanner: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN

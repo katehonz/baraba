@@ -1,0 +1,49 @@
+services:
+  scanner-service:
+    build:
+      context: ./scanner_service_java
+      dockerfile: Dockerfile
+    container_name: baraba-scanner-java
+    ports:
+      - "5001:5001"
+    environment:
+      # Database (uses existing PostgreSQL)
+      - DB_HOST=${DB_HOST:-baraba_postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-jesterac}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      # Azure Document Intelligence
+      - AZURE_DI_ENDPOINT=${AZURE_DI_ENDPOINT:-}
+      - AZURE_DI_API_KEY=${AZURE_DI_API_KEY:-}
+      # JWT (same as other services)
+      - JWT_SECRET=${JWT_SECRET:-changeme-generate-secure-secret}
+      # Phoenix API
+      - PHOENIX_API_URL=${PHOENIX_API_URL:-http://baraba-web:4000}
+      # Temp storage
+      - TEMP_DIR=/tmp/scanner-uploads
+    volumes:
+      - scanner-uploads:/tmp/scanner-uploads
+    networks:
+      - baraba_ub_baraba_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
+
+volumes:
+  scanner-uploads:
+    driver: local
+
+networks:
+  baraba_ub_baraba_network:
+    external: true

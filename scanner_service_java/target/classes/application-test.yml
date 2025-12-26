@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+    show-sql: false
+  
+  flyway:
+    enabled: false
+  
+  h2:
+    console:
+      enabled: true
+
+# Override Azure settings for test
+azure:
+  document-intelligence:
+    endpoint: ""
+    api-key: ""
+
+logging:
+  level:
+    bg.baraba.scanner: DEBUG

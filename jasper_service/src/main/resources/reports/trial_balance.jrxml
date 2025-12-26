@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="trial_balance"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20">
+
+    <parameter name="company_id" class="java.lang.String">
+        <defaultValueExpression><![CDATA["00000000-0000-0000-0000-000000000001"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="date_to" class="java.sql.Date"/>
+
+    <queryString>
+        <![CDATA[
+        SELECT
+            a.code AS account_code,
+            a.name AS account_name,
+            COALESCE(SUM(CASE WHEN el.debit_account_id = a.id THEN el.debit_amount ELSE 0 END), 0) AS debit_total,
+            COALESCE(SUM(CASE WHEN el.credit_account_id = a.id THEN el.credit_amount ELSE 0 END), 0) AS credit_total,
+            COALESCE(SUM(CASE WHEN el.debit_account_id = a.id THEN el.debit_amount ELSE 0 END), 0) -
+            COALESCE(SUM(CASE WHEN el.credit_account_id = a.id THEN el.credit_amount ELSE 0 END), 0) AS balance
+        FROM accounts a
+        LEFT JOIN entry_lines el ON (el.debit_account_id = a.id OR el.credit_account_id = a.id)
+        LEFT JOIN journal_entries je ON el.journal_entry_id = je.id
+        WHERE a.company_id = CAST($P{company_id} AS UUID)
+          AND (je.id IS NULL OR (
+              je.company_id = CAST($P{company_id} AS UUID)
+              AND (CAST($P{date_to} AS DATE) IS NULL OR je.accounting_date <= CAST($P{date_to} AS DATE))
+          ))
+        GROUP BY a.code, a.name
+        HAVING COALESCE(SUM(CASE WHEN el.debit_account_id = a.id THEN el.debit_amount ELSE 0 END), 0) > 0
+            OR COALESCE(SUM(CASE WHEN el.credit_account_id = a.id THEN el.credit_amount ELSE 0 END), 0) > 0
+        ORDER BY a.code
+        ]]>
+    </queryString>
+
+    <field name="account_code" class="java.lang.String"/>
+    <field name="account_name" class="java.lang.String"/>
+    <field name="debit_total" class="java.math.BigDecimal"/>
+    <field name="credit_total" class="java.math.BigDecimal"/>
+    <field name="balance" class="java.math.BigDecimal"/>
+
+    <variable name="total_debit" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{debit_total}]]></variableExpression>
+    </variable>
+    <variable name="total_credit" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{credit_total}]]></variableExpression>
+    </variable>
+
+    <title>
+        <band height="80">
+            <staticText>
+                <reportElement x="0" y="0" width="555" height="35"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="20" pdfEncoding="UTF-8" isPdfEmbedded="true" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Trial Balance]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="0" y="35" width="555" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="DejaVu Sans" size="12" pdfEncoding="UTF-8" isPdfEmbedded="true"/>
+                </textElement>
+                <text><![CDATA[Оборотна ведомост]]></text>
+            </staticText>
+            <textField pattern="dd.MM.yyyy HH:mm">
+                <reportElement x="0" y="55" width="555" height="20"/>
+                <textElement textAlignment="Center"/>
+                <textFieldExpression><![CDATA[new java.util.Date()]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="0" width="70" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Code]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="70" y="0" width="195" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Account Name]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="265" y="0" width="100" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Debit]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="365" y="0" width="100" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Credit]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="465" y="0" width="90" height="25" backcolor="#336699"/>
+                <box><pen lineWidth="0.5" lineColor="#FFFFFF"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Balance]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="20">
+            <textField>
+                <reportElement x="0" y="0" width="70" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{account_code}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="70" y="0" width="195" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement verticalAlignment="Middle">
+                    <paragraph leftIndent="3"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{account_name}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement x="265" y="0" width="100" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{debit_total}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement x="365" y="0" width="100" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{credit_total}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement x="465" y="0" width="90" height="20"/>
+                <box><pen lineWidth="0.25"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{balance}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="25">
+            <line>
+                <reportElement x="0" y="0" width="555" height="1"/>
+            </line>
+            <textField>
+                <reportElement x="435" y="5" width="80" height="20"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA["Page " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+            <textField evaluationTime="Report">
+                <reportElement x="515" y="5" width="40" height="20"/>
+                <textElement textAlignment="Left"/>
+                <textFieldExpression><![CDATA[" of " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+
+    <summary>
+        <band height="35">
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="5" width="265" height="25" backcolor="#336699"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                    <paragraph rightIndent="10"/>
+                </textElement>
+                <text><![CDATA[TOTALS:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement mode="Opaque" x="265" y="5" width="100" height="25" backcolor="#EEEEEE"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{total_debit}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement mode="Opaque" x="365" y="5" width="100" height="25" backcolor="#EEEEEE"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{total_credit}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00">
+                <reportElement mode="Opaque" x="465" y="5" width="90" height="25" backcolor="#EEEEEE"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{total_debit}.subtract($V{total_credit})]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+</jasperReport>

@@ -1,0 +1,73 @@
+# Nim микросървизи за Baraba
+# Стартиране: docker compose -f docker-compose.nim.yml up -d
+#
+# JWT_SECRET трябва да е еднакъв за всички сервизи!
+# Всички сервизи използват JWT аутентикация от identity_service
+
+services:
+  identity_service:
+    build:
+      context: .
+      dockerfile: identity_service/Dockerfile
+    container_name: baraba_identity
+    ports:
+      - "5002:5002"
+    environment:
+      - DB_HOST=baraba_postgres
+      - DB_PORT=5432
+      - DB_NAME=jesterac
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - JWT_SECRET=${JWT_SECRET:-changeme-generate-secure-secret}
+    networks:
+      - baraba_ub_baraba_network
+    restart: unless-stopped
+
+  vies_service:
+    build:
+      context: .
+      dockerfile: vies_service/Dockerfile
+    container_name: baraba_vies
+    ports:
+      - "5003:5003"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-changeme-generate-secure-secret}
+    networks:
+      - baraba_ub_baraba_network
+    restart: unless-stopped
+
+  vat_service:
+    build:
+      context: .
+      dockerfile: vat_service/Dockerfile
+    container_name: baraba_vat
+    ports:
+      - "5004:5004"
+    environment:
+      - DB_HOST=baraba_postgres
+      - DB_PORT=5432
+      - DB_NAME=jesterac
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - JWT_SECRET=${JWT_SECRET:-changeme-generate-secure-secret}
+    networks:
+      - baraba_ub_baraba_network
+    restart: unless-stopped
+
+  scanner_service:
+    build:
+      context: .
+      dockerfile: scanner_service/Dockerfile
+    container_name: baraba_scanner
+    ports:
+      - "5001:5001"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-changeme-generate-secure-secret}
+      - PHOENIX_API_URL=http://baraba_phoenix:4000
+    networks:
+      - baraba_ub_baraba_network
+    restart: unless-stopped
+
+networks:
+  baraba_ub_baraba_network:
+    external: true
